@@ -151,10 +151,6 @@ LD = $(FC)
 LN = $(FN)
 # LDOPTS = -Bstatic
 
-ifdef EBROOTSUITESPARSE
-  LDOPTS += -L$(EBROOTSUITESPARSE)/lib
-endif
-
 
 #!!!Local Variables:
 #!!! mode: Makefile
