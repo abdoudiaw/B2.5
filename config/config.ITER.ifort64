@@ -34,12 +34,12 @@ ifndef SOLPS_CPP
 DEFINES   += -DNO_NAG
 endif
 endif
+LD_SSP    ?= $(shell pkg-config UMFPACK --libs)
 
 DEFINES   += -DNO_OPT
 
 CPP        = /lib/cpp -traditional
 
-LD_SSP ?= -lumfpack -lamd -lcolamd -lsuitesparseconfig
 
 # Avoid usage of ifx compiler until its issues are fixed
 # ifeq (,$(findstring CentOS,$(OS)))
