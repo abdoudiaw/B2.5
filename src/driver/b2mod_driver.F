@@ -2296,9 +2296,8 @@ c new CDF movie option (1st frame at t=0)
 #endif
       character*256 filename, fort31name
 #ifdef B25_EIRENE
-      character*256 filename_eir
-      logical ex_eir
-      integer iflag_eir
+      logical ex
+      integer iflag
 #endif
 #if ( defined(B25_EIRENE) || defined(IMAS) )
       character*512 systemarg
@@ -2652,11 +2651,11 @@ c new CDF movie option
 #ifdef B25_EIRENE
             if (switch%use_eirene.ne.0 .and.
      &          .not.eirene_wall_read) then
-              filename_eir = fort_lc//'44'
-              call find_file(filename_eir,ex_eir)
-              if (ex_eir) then
-                open(unit=44,file=filename_eir)
-                call ngread(mpg,geo,ns,switch,ismain,iflag_eir)
+              filename = fort_lc//'44'
+              call find_file(filename,ex)
+              if (ex) then
+                open(unit=44,file=filename)
+                call ngread(mpg,geo,ns,switch,ismain,iflag)
                 eirene_wall_read = .true.
               endif
             endif
