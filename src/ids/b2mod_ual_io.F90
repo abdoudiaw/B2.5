@@ -1801,6 +1801,7 @@ contains
             allocate( divertors%divertor( mpg%nStr ) )
             do j = 1, mpg%nStr
               i = mpg%strDiv(j)
+              if (i.eq.0) cycle
               allocate( divertors%divertor(i)%name(1) )
               allocate( divertors%divertor(i)%target(1) )
               allocate( divertors%divertor(i)%target(1)%name(1) )

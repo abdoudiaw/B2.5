@@ -13,26 +13,26 @@
       ! UMFPACK double integer routines
       ! ================================
       ! Note: the final authority of the implementation on the c-side of
-      ! these routines lies with the manual provided by Dr. Tim Davis. 
-      ! See the github repository 
-      ! (https://github.com/DrTimothyAldenDavis/SuiteSparse, and the 
+      ! these routines lies with the manual provided by Dr. Tim Davis.
+      ! See the github repository
+      ! (https://github.com/DrTimothyAldenDavis/SuiteSparse, and the
       ! UMFPACK package thereof) and the manual included there. Below,
       ! we provide a brief description in the interface of the expected
-      ! arguments for each function. 
+      ! arguments for each function.
 #ifdef UMFPACK
-      interface 
+      interface
         ! Defaults
-        subroutine UmfpackDefaultsDI(control)  
+        subroutine UmfpackDefaultsDI(control)
      &       bind(c, name='umfpack_di_defaults')
 
             ! Description
             !============
-            ! This routine simply loads in the default values for the 
-            ! control variables used. Normally, there is no need to 
-            ! change these. If this is the case, refer to the manual. 
-            
+            ! This routine simply loads in the default values for the
+            ! control variables used. Normally, there is no need to
+            ! change these. If this is the case, refer to the manual.
+
             ! C module
-            use, intrinsic :: iso_c_binding 
+            use, intrinsic :: iso_c_binding
 
             ! Declare
             real(c_double)      :: control(*)
@@ -40,25 +40,25 @@
         end subroutine
 
         ! Symbolic creator
-        subroutine UmfpackSymbolicDI(nrow, ncol, Ap, Ai, Ax, symbolic, 
-     &       control, info)  
+        subroutine UmfpackSymbolicDI(nrow, ncol, Ap, Ai, Ax, symbolic,
+     &       control, info)
      &       bind(c, name='umfpack_di_symbolic')
 
             ! Description
             !============
             ! This routine loads in the symbolic factorization, which is
-            ! a sort of preprocessing step for the numerical 
-            ! factorization. The arguments to be parsed are the number 
-            ! of rows and columns of the matrix, the sparse matrix in 
-            ! compressed column storage format (Ap is the column 
+            ! a sort of preprocessing step for the numerical
+            ! factorization. The arguments to be parsed are the number
+            ! of rows and columns of the matrix, the sparse matrix in
+            ! compressed column storage format (Ap is the column
             ! pointer, Ai the row indices, and Ax the values), and the
-            ! control and info arrays. The 'symbolic' argument here 
-            ! should be a pointer, which, on exit, points to the 
+            ! control and info arrays. The 'symbolic' argument here
+            ! should be a pointer, which, on exit, points to the
             ! symbolic object used in the numerical counterpart of this
-            ! routine. 
-            
+            ! routine.
+
             ! C module
-            use, intrinsic :: iso_c_binding 
+            use, intrinsic :: iso_c_binding
 
             ! Import
             import umfpack_control, umfpack_info
@@ -66,45 +66,45 @@
             ! Declare
             integer(c_int), value           :: nrow, ncol
             integer(c_int), intent(in)      :: Ap(*), Ai(*)
-            real(c_double)                  :: 
+            real(c_double)                  ::
      &           control(umfpack_control), info(umfpack_info)
             real(c_double), intent(in)      :: Ax(*)
-            type(c_ptr)                     :: symbolic 
+            type(c_ptr)                     :: symbolic
 
         end subroutine
 
         ! Symbolic destructor
-        subroutine UmfpackFreeSymbolicDI(symbolic)  
+        subroutine UmfpackFreeSymbolicDI(symbolic)
      &       bind(c, name='umfpack_di_free_symbolic')
 
             ! Description
             !============
             ! This routine destroys the symbolic object
-            
+
             ! C module
-            use, intrinsic :: iso_c_binding 
+            use, intrinsic :: iso_c_binding
 
             ! Declare
-            type(c_ptr)                     :: symbolic 
+            type(c_ptr)                     :: symbolic
 
         end subroutine
 
         ! Numeric creator
-        subroutine UmfpackNumericDI(Ap, Ai, Ax, symbolic, numeric, 
-     &       control, info) 
+        subroutine UmfpackNumericDI(Ap, Ai, Ax, symbolic, numeric,
+     &       control, info)
      &       bind(c, name='umfpack_di_numeric')
 
             ! Description
             !============
             ! Constructs the object to factorize the matrix numerically,
-            ! which is used in the solver. The input arguments are 
-            ! largely the same as in the symbolic counterpart of this 
+            ! which is used in the solver. The input arguments are
+            ! largely the same as in the symbolic counterpart of this
             ! routine, though the symbolic argument is now passed by
-            ! value, whereas the numeric argument is passed as a 
-            ! pointer. 
+            ! value, whereas the numeric argument is passed as a
+            ! pointer.
 
             ! C module
-            use, intrinsic :: iso_c_binding 
+            use, intrinsic :: iso_c_binding
 
             ! Declare
             integer(c_int)                  :: Ap(*), Ai(*)
@@ -116,36 +116,36 @@
         end subroutine
 
         ! Numeric destructor
-        subroutine UmfpackFreeNumericDI(numeric)  
+        subroutine UmfpackFreeNumericDI(numeric)
      &       bind(c, name='umfpack_di_free_numeric')
 
             ! Description
             !============
             ! Destroys the numeric object
-            
+
             ! C module
-            use, intrinsic :: iso_c_binding 
+            use, intrinsic :: iso_c_binding
 
             ! Declare
-            type(c_ptr)                     :: numeric 
+            type(c_ptr)                     :: numeric
 
         end subroutine
 
         ! Solver
-        subroutine UmfpackSolveDI(sys, Ap, Ai, Ax, x, b, numeric, 
-     &       control, info) 
+        subroutine UmfpackSolveDI(sys, Ap, Ai, Ax, x, b, numeric,
+     &       control, info)
      &       bind(c, name='umfpack_di_solve')
 
             ! Description
             !============
             ! General solver for a system ( Ax = b). Note that the 'A'
             ! in this system may be manipulated by adjusting the 'sys'
-            ! argument. To solve a regular system, this should equal 
-            ! UMFPACK_A (which is currently 0). This UMFPACK_A is a 
+            ! argument. To solve a regular system, this should equal
+            ! UMFPACK_A (which is currently 0). This UMFPACK_A is a
             ! variable that should be supplied by UMFPACK.
 
             ! C module
-            use, intrinsic :: iso_c_binding 
+            use, intrinsic :: iso_c_binding
 
             ! Declare
             integer(c_int)                  :: Ap(*), Ai(*)
@@ -157,24 +157,24 @@
         end subroutine
 
         ! Info reporter - not used
-        subroutine UmfpackReportInfoDI(control, info) 
+        subroutine UmfpackReportInfoDI(control, info)
      &       bind(c, name='umfpack_di_report_info')
 
             ! C module
-            use, intrinsic :: iso_c_binding 
+            use, intrinsic :: iso_c_binding
 
             ! Declare
             real(c_double)                     :: info(*), control(*)
-            
+
         end subroutine
 
         ! Coordinate to compressed column storage format
-        subroutine UmfpackTriplet2ColDI(nrow, ncol, nz, Ti, Tj, Tx, 
-     &       Ap, Ai, Ax, Map) 
+        subroutine UmfpackTriplet2ColDI(nrow, ncol, nz, Ti, Tj, Tx,
+     &       Ap, Ai, Ax, Map)
      &       bind(c, name='umfpack_di_triplet_to_col')
 
             ! C module
-            use, intrinsic :: iso_c_binding 
+            use, intrinsic :: iso_c_binding
 
             ! Declare
             integer(c_int), value           :: nrow, ncol, nz
@@ -186,26 +186,26 @@
 
         end subroutine
 
-      end interface   
+      end interface
 #endif
       contains
 
 
-    ! UMFPACK 
-    !========
-    ! The sparse solver 
+      ! UMFPACK
+      !========
+      ! The sparse solver
       subroutine solve_umfpack(n, nnz, b, sol)
 
         ! Description
         !============
-        ! This routine solves a sparse linear system by calling the 
+        ! This routine solves a sparse linear system by calling the
         ! UMFPACK solvers. Here, it is assumed that the variables are
-        ! in double precision. The input matrix A should be in a 
-        ! MySparse type format and will be converted to compressed 
+        ! in double precision. The input matrix A should be in a
+        ! MySparse type format and will be converted to compressed
         ! column storage format (CCS) using the UMFPACK routines. The
-        ! system is then solved by calling the required UMFPACK solver. 
+        ! system is then solved by calling the required UMFPACK solver.
         ! The rhs should be given in b, the solution will be returned in
-        ! sol. Note that the solver here is a direct solver! 
+        ! sol. Note that the solver here is a direct solver!
 
         ! The result whether the solver is successful is parsed through
         ! 'info_solver'. It is zero when successful, and nonzero when
@@ -214,12 +214,13 @@
         ! Declare variables
         !==================
         ! Arguments
-        integer, intent(in) 	:: n, nnz
+        integer, intent(in)     :: n, nnz
         real(R8), intent(in)    :: b(n)
         real(R8), intent(out)   :: sol(n)
 
+#ifdef UMFPACK
         ! Matrix in triplet format, as saved in b2mod_ma28
-        integer			:: Arow(nnz), Acol(nnz)
+        integer                 :: Arow(nnz), Acol(nnz)
         real(R8)                :: Aval(nnz)
 
         ! Auxiliary
@@ -228,46 +229,46 @@
         real(c_double)     :: Ax(nnz)
 
         real(c_double)     :: sol_c(n)
-        real(c_double)     :: 
+        real(c_double)     ::
      &       control(umfpack_control), info(umfpack_info)
 
         type(c_ptr)        :: symbolic, numeric
 
-#ifdef UMFPACK
-        ! Read in matrix from b2mod_ma28 (storage can perhaps be moved in the future)
+        ! Read in matrix from b2mod_ma28
+        ! (storage can perhaps be moved in the future)
         Arow = irnh(1:nnz)-1
         Acol = icnh(1:nnz)-1
         Aval = a1h(1:nnz)
 
         ! Convert to CCS
         !===============
-        ! First, convert the row and column indices to zero based 
+        ! First, convert the row and column indices to zero based
         ! indexing
 
         ! Call converter
-        call UmfpackTriplet2ColDI(n, n, nnz, Arow, 
+        call UmfpackTriplet2ColDI(n, n, nnz, Arow,
      &       Acol, Aval, Ap, Ai, Ax, Map)
 
         ! Solve
         !======
-        ! Solve using the C-routines of UMFPACK. The Double precision, 
-        ! integer routines (_di_) are used 
+        ! Solve using the C-routines of UMFPACK.
+        ! The double precision integer routines (_di_) are used
 
         ! Set defaults
         call UmfpackDefaultsDI(control)
 
         ! Set symbolic factorization
-        call UmfpackSymbolicDI(n, n, Ap, Ai, Ax, symbolic, 
+        call UmfpackSymbolicDI(n, n, Ap, Ai, Ax, symbolic,
      &       control, info)
 
         ! Compute numerical factorization
-        call UmfpackNumericDI(Ap, Ai, Ax, symbolic, numeric, 
+        call UmfpackNumericDI(Ap, Ai, Ax, symbolic, numeric,
      &       control, info)
 
         ! Compute the solution
-        call UmfpackSolveDI(umfpack_a, Ap, Ai, Ax, sol_c, b, numeric, 
+        call UmfpackSolveDI(umfpack_a, Ap, Ai, Ax, sol_c, b, numeric,
      &       control, info)
-        if (info(1) .ne. 0) then 
+        if (info(1) .ne. 0) then
             print *, 'Linear solver may not have converged, info: ',
      &              info(1)
         end if
@@ -281,15 +282,16 @@
         ! Post-process
         !=============
         ! Cast solution
-        sol = sol_c 
+        sol = sol_c
 
         ! Cast flag
         flag = nint(info(1))
 #else
+        sol = 0.0_R8
+        call xertst(nnz.gt.0, 'Invalid parameter nnz!')
         call xerrab('UMFPACK not available! Link and re-compile with'//
      .   ' UMFPACK library')
 #endif
-      end subroutine
+      end subroutine solve_umfpack
 
-      
       end module b2mod_umfpack
