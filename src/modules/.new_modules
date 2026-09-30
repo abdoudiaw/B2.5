@@ -7,3 +7,4 @@ Added b2mod_convergence for potential equation inner iterations variables
 Added b2mod_plasma_netcdf for optional final b2fplasma.nc output
 Added b2mod_input_fields for two-dimensional transport input
 Added b2mod_growth_guard for local nonlinear iteration safeguards
+Added b2mod_umfpack as new optional matrix solver
