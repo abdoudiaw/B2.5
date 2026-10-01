@@ -318,11 +318,6 @@ c time-dependent treatment
 
 * ..main computation
       lnlam = dv%lnlam ! copy
-      if (switch%b2mndt_style.eq.2) then
-! TEMPORARY WG PORT of standard B2.5 commit 5c8a2c5e0.
-! Remove when that fix is present in this lineage.
-        psnl%ua = pl%ua
-      endif
 *   ..compute individual species corrections
 #if ( defined(_OPENMP) && !defined(NO_OPENMP_B2NPMO) )
 #ifdef WITH_FTIMINGS
