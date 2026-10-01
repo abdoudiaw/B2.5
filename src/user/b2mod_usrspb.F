@@ -8,9 +8,6 @@
       use b2mod_user_namelist
       use b2mod_b2plot_wall_loading
       use b2mod_dimensions
-#ifdef B25_EIRENE
-      use eirmod_extrab25, only : nsgmx
-#endif
       implicit none
 
 c
