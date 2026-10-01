@@ -3398,6 +3398,14 @@
 				</switch>
 			</switchgroup>
 			<switch>
+				<name>eirene_training_dump</name>
+				<default>0</default>
+				<type>integer</type>
+				<description>
+					If eirene_training_dump.ne.0 during a coupled run, B2.5 writes one NetCDF training event after each Eirene call. Each event contains the BRAEIR plasma background, the raw EIRBRA source estimators before B2.5 mapping, scaling and linearization, and coupling metadata. If eirene_averaging_multiple_calls.gt.1, the averaged EIRBRA source estimators used by B2.5 are written as an additional event. The default value 0 produces no additional files and does not alter the coupled solution.
+				</description>
+			</switch>
+			<switch>
 				<name>b2mndr_inverse_ua</name>
 				<default>0</default>
 				<type>integer</type>

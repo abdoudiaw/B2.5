@@ -19,6 +19,8 @@
       use b2mod_trace
       use b2mod_b2cmpa
       use b2mod_b2cmpb
+      use b2mod_eirene_training_dump
+     & ,only : write_eirene_training_event
       use b2mod_balance !djm Jan2017
      & ,only : eirene_mc_papl_sna0to1, eirene_mc_pmpl_sna0to1,
      &         eirene_mc_pael_sne0to1, eirene_mc_pmel_sne0to1,
@@ -260,14 +262,14 @@ c      data lis_hlp / 110, 111, 112, 49 /
 
       integer output_style, linearisation, save_f31,
      1 repeat_first_call, ionising_core, dpc_fix, eircount,
-     2 no_sseicorr, save_f30, stab_corr
+     2 no_sseicorr, save_f30, stab_corr, training_dump
       save ncall, output_style,
      * pfrregno1, pfrregno2, solregno, isfeedback, b2stbc_feedback,
      * nesepm_sol, nesepm_pfr, ndes, private_flux_puff, nesepm_istra,
      * neutral_sources_rescale, ncallfeedback, save_f31,
      1 repeat_first_call, ionising_core, dpc_fix,
      2 volrec_sol, ndes_sol, no_sseicorr, nepedm_sol, save_f30,
-     3 stab_corr
+     3 stab_corr, training_dump
 csw 26mar2013
       integer, save :: iscltst=0
 csw 26feb2014
@@ -307,7 +309,8 @@ csw 26feb2014
      4  private_flux_puff/0.0_R8/, ionising_core/0/, dpc_fix/1/,
      5  ndes/0.0_R8/, save_f31/0/, repeat_first_call/1/,
      6  volrec_sol/0.0_R8/, ndes_sol/0.0_R8/,
-     7  no_sseicorr/0/, nepedm_sol/0.0_R8/, save_f30/0/, stab_corr/1/
+     7  no_sseicorr/0/, nepedm_sol/0.0_R8/, save_f30/0/, stab_corr/1/,
+     8  training_dump/0/
 
 *-----------------------------------------------------------------------
 *.computation
@@ -468,6 +471,7 @@ c not sure this is the right place
         call ipgeti ('eirene_dpc_fix', dpc_fix)
         call ipgeti ('eirene_savef30', save_f30)
         call ipgeti ('eirene_savef31', save_f31)
+        call ipgeti ('eirene_training_dump', training_dump)
         call ipgeti ('eirene_use_recyceir', use_recyceir)
 csw 28jan2011, call to eirene_mc_init not used anymore, use new modules
 c        call eirene_mc_init(nx,ny)
@@ -942,6 +946,11 @@ c         SINGLE EIRENE CALL
           call eirene_eirsrt(last,my_ltime,eirene_step_dt,tflux,
      *     b2brem,b2rad,b2qie(0),b2vdp,
      1     eirene_step_cpu)
+          if(training_dump.ne.0) then
+            call write_eirene_training_event(ncall,eircount+1,
+     *        n_avg_repeat,0,tflux,flux_scale,
+     1        crcstra(1:size(tflux)))
+          endif
 c         Cumulate source terms from past and current Eirene calls
           if(n_avg_repeat.gt.1) then
            call cumulate_source_arrays(write_eirene_sources)
@@ -956,6 +965,10 @@ c         calculated at the last Eirene call for the next real Eirene time step
 c         Calculate averaged source terms from all Eirene calls, if using repeated calls
           call calc_average_source_arrays(n_avg_repeat,
      *      write_eirene_sources)
+          if(training_dump.ne.0) then
+            call write_eirene_training_event(ncall,0,n_avg_repeat,1,
+     *        tflux,flux_scale,crcstra(1:size(tflux)))
+          endif
         endif
 
 #ifdef B25_EIRENE
@@ -994,6 +1007,11 @@ csw 25jan2011 LTIME=.false. in eirsrt call
               call eirene_eirsrt(last,my_ltime,eirene_step_dt,tflux,
      *         b2brem,b2rad,b2qie(0),b2vdp,
      1         eirene_step_cpu)
+              if(training_dump.ne.0) then
+                call write_eirene_training_event(ncall,eircount+1,
+     *            repeat_first_call+1,0,tflux,flux_scale,
+     1            crcstra(1:size(tflux)))
+              endif
               eircount=eircount+1
             enddo
           endif
