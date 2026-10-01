@@ -949,7 +949,8 @@ c         SINGLE EIRENE CALL
           if(training_dump.ne.0) then
             call write_eirene_training_event(ncall,eircount+1,
      *        n_avg_repeat,0,tflux,flux_scale,
-     1        crcstra(1:size(tflux)))
+     1        crcstra(1:size(tflux)),last,my_ltime,eirene_step_dt,
+     2        b2brem,b2rad,b2qie(0),b2vdp,eirene_step_cpu)
           endif
 c         Cumulate source terms from past and current Eirene calls
           if(n_avg_repeat.gt.1) then
@@ -967,7 +968,9 @@ c         Calculate averaged source terms from all Eirene calls, if using repeat
      *      write_eirene_sources)
           if(training_dump.ne.0) then
             call write_eirene_training_event(ncall,0,n_avg_repeat,1,
-     *        tflux,flux_scale,crcstra(1:size(tflux)))
+     *        tflux,flux_scale,crcstra(1:size(tflux)),last,my_ltime,
+     1        eirene_step_dt,b2brem,b2rad,b2qie(0),b2vdp,
+     2        eirene_step_cpu)
           endif
         endif
 
@@ -1010,7 +1013,9 @@ csw 25jan2011 LTIME=.false. in eirsrt call
               if(training_dump.ne.0) then
                 call write_eirene_training_event(ncall,eircount+1,
      *            repeat_first_call+1,0,tflux,flux_scale,
-     1            crcstra(1:size(tflux)))
+     1            crcstra(1:size(tflux)),last,my_ltime,
+     2            eirene_step_dt,b2brem,b2rad,b2qie(0),b2vdp,
+     3            eirene_step_cpu)
               endif
               eircount=eircount+1
             enddo
