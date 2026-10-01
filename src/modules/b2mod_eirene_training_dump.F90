@@ -1,6 +1,5 @@
 ! SOLPS-ITER--SOLSTICE neutral-source coupling project
 ! Project author and maintainer: Abdou Diaw
-! Initial implementation assistance: OpenAI Codex, 2026
 !
 ! Observation-only NetCDF writer for the B2.5--EIRENE coupling seam.
 ! This module does not modify EIRENE tallies or B2.5 source terms.
