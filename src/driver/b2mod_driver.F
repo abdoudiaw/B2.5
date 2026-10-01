@@ -1613,8 +1613,6 @@ csw 09oct2012
 !$OMP PARALLEL
 #endif
 #endif
-! TEMPORARY WG PORT of standard B2.5 commit f8499da56.
-! Remove when that fix is present in this lineage.
         IUNOUT=6+IFOFF
 #ifdef USE_OPENMP
 #ifndef USE_EXT_OPENMP

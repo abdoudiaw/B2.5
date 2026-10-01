@@ -475,6 +475,9 @@
          if (file_open) close(nout(io))
       enddo
 * ..end of computation
+#ifdef B25_EIRENE
+      CALL EIRENE_DEALLOC_CCOUPL
+#endif
       call destroyB2State (state)
       call destroyB2StateExt (state_ext)
       call dealloc_geometry (geo)
