@@ -9,6 +9,9 @@ module b2mod_eirene_training_dump
 #ifdef B25_EIRENE
   use eirmod_braeir
   use eirmod_eirbra
+  use eirmod_ccoupl, only : map_ncutb => ncutb, map_ncutl => ncutl
+  use eirmod_cgeom, only : map_npoint => npoint, &
+      map_targindex => targindex
   use eirmod_cestim, only : &
       pdena, pdenm, pdeni, edena, edenm, edeni, &
       vxdena, vxdenm, vxdeni, vydena, vydenm, vydeni, &
@@ -38,19 +41,173 @@ module b2mod_eirene_training_dump
   implicit none
   private
 
+  type :: braeir_input_snapshot
+    logical :: ready = .false.
+    integer :: ncutb = 0, ncutl = 0, targindex = 0
+    real(kind=R8), allocatable :: tflux(:), flux_scale(:)
+    character(len=1), allocatable :: crcstra(:)
+    integer, allocatable :: npoint(:,:)
+    real(kind=R8), allocatable :: dni(:,:,:), vv(:,:,:), uu(:,:,:)
+    real(kind=R8), allocatable :: ww(:,:,:), up(:,:,:)
+    real(kind=R8), allocatable :: fnix(:,:,:), fniy(:,:,:)
+    real(kind=R8), allocatable :: vparx(:,:,:), vpary(:,:,:)
+    real(kind=R8), allocatable :: vradx(:,:,:), vrady(:,:,:)
+    real(kind=R8), allocatable :: uudia(:,:,:), vvdia(:,:,:)
+    real(kind=R8), allocatable :: zi(:,:,:)
+    real(kind=R8), allocatable :: te(:,:), ti(:,:), pr(:,:), rr(:,:)
+    real(kind=R8), allocatable :: feix(:,:), feiy(:,:)
+    real(kind=R8), allocatable :: feex(:,:), feey(:,:)
+    real(kind=R8), allocatable :: vol(:,:), bfield(:,:), bpol(:,:)
+    real(kind=R8), allocatable :: brad(:,:), btor(:,:), po(:,:)
+    real(kind=R8), allocatable :: deltae_parx(:,:), deltae_pary(:,:)
+    real(kind=R8), allocatable :: deltae_radx(:,:), deltae_rady(:,:)
+    real(kind=R8), allocatable :: deltai_parx(:,:), deltai_pary(:,:)
+    real(kind=R8), allocatable :: deltai_radx(:,:), deltai_rady(:,:)
+    real(kind=R8), allocatable :: delta_sheathx(:,:)
+    real(kind=R8), allocatable :: delta_sheathy(:,:), aiso(:,:)
+  end type braeir_input_snapshot
+
+  type(braeir_input_snapshot), save :: input_snapshot
+
+  public :: capture_eirene_training_input
   public :: write_eirene_training_event
 
 contains
 
-  subroutine write_eirene_training_event(b2_call, repeat_index, &
-      repeat_count, event_kind, tflux_b2, flux_scale_b2, crcstra_b2, &
-      lstop_b2, ltime_b2, deltat_b2, b2brm_b2, b2rd_b2, b2q_b2, &
-      b2vp_b2, step_cpu_b2)
+  subroutine capture_eirene_training_input(tflux_b2, flux_scale_b2, &
+      crcstra_b2)
     implicit none
-    integer, intent(in) :: b2_call, repeat_index, repeat_count
-    integer, intent(in) :: event_kind
     real(kind=R8), intent(in) :: tflux_b2(:), flux_scale_b2(:)
     character(len=1), intent(in) :: crcstra_b2(:)
+
+#ifdef B25_EIRENE
+    integer :: mpi_rank, mpi_error
+
+    call mpi_comm_rank(mpi_comm_world, mpi_rank, mpi_error)
+    if (mpi_rank /= 0) return
+
+    call clear_eirene_training_input()
+
+    allocate(input_snapshot%tflux, source=tflux_b2)
+    allocate(input_snapshot%flux_scale, source=flux_scale_b2)
+    allocate(input_snapshot%crcstra, source=crcstra_b2)
+    allocate(input_snapshot%dni, source=DNIB)
+    allocate(input_snapshot%vv, source=VVB)
+    allocate(input_snapshot%uu, source=UUB)
+    allocate(input_snapshot%ww, source=WWB)
+    allocate(input_snapshot%up, source=UPB)
+    allocate(input_snapshot%fnix, source=FNIXB)
+    allocate(input_snapshot%fniy, source=FNIYB)
+    allocate(input_snapshot%vparx, source=VPARXB)
+    allocate(input_snapshot%vpary, source=VPARYB)
+    allocate(input_snapshot%vradx, source=VRADXB)
+    allocate(input_snapshot%vrady, source=VRADYB)
+    allocate(input_snapshot%uudia, source=UUDIAB)
+    allocate(input_snapshot%vvdia, source=VVDIAB)
+    allocate(input_snapshot%zi, source=ZIB)
+    allocate(input_snapshot%te, source=TEB)
+    allocate(input_snapshot%ti, source=TIB)
+    allocate(input_snapshot%pr, source=PRB)
+    allocate(input_snapshot%rr, source=RRB)
+    allocate(input_snapshot%feix, source=FEIXB)
+    allocate(input_snapshot%feiy, source=FEIYB)
+    allocate(input_snapshot%feex, source=FEEXB)
+    allocate(input_snapshot%feey, source=FEEYB)
+    allocate(input_snapshot%vol, source=VOLB)
+    allocate(input_snapshot%bfield, source=BFELDB)
+    allocate(input_snapshot%bpol, source=BPOLB)
+    allocate(input_snapshot%brad, source=BRADB)
+    allocate(input_snapshot%btor, source=BTORB)
+    allocate(input_snapshot%deltae_parx, source=DELTAE_PARXB)
+    allocate(input_snapshot%deltae_pary, source=DELTAE_PARYB)
+    allocate(input_snapshot%deltae_radx, source=DELTAE_RADXB)
+    allocate(input_snapshot%deltae_rady, source=DELTAE_RADYB)
+    allocate(input_snapshot%deltai_parx, source=DELTAI_PARXB)
+    allocate(input_snapshot%deltai_pary, source=DELTAI_PARYB)
+    allocate(input_snapshot%deltai_radx, source=DELTAI_RADXB)
+    allocate(input_snapshot%deltai_rady, source=DELTAI_RADYB)
+    allocate(input_snapshot%delta_sheathx, source=DELTA_SHEATHXB)
+    allocate(input_snapshot%delta_sheathy, source=DELTA_SHEATHYB)
+    allocate(input_snapshot%aiso, source=AISOB)
+    allocate(input_snapshot%po, source=POB)
+
+    if (associated(map_ncutb)) input_snapshot%ncutb = map_ncutb
+    if (associated(map_ncutl)) input_snapshot%ncutl = map_ncutl
+    input_snapshot%targindex = map_targindex
+    if (allocated(map_npoint)) then
+      allocate(input_snapshot%npoint, source=map_npoint)
+    end if
+    input_snapshot%ready = .true.
+#endif
+  end subroutine capture_eirene_training_input
+
+  subroutine clear_eirene_training_input()
+    implicit none
+
+    if (allocated(input_snapshot%tflux)) deallocate(input_snapshot%tflux)
+    if (allocated(input_snapshot%flux_scale)) &
+        deallocate(input_snapshot%flux_scale)
+    if (allocated(input_snapshot%crcstra)) &
+        deallocate(input_snapshot%crcstra)
+    if (allocated(input_snapshot%npoint)) deallocate(input_snapshot%npoint)
+    if (allocated(input_snapshot%dni)) deallocate(input_snapshot%dni)
+    if (allocated(input_snapshot%vv)) deallocate(input_snapshot%vv)
+    if (allocated(input_snapshot%uu)) deallocate(input_snapshot%uu)
+    if (allocated(input_snapshot%ww)) deallocate(input_snapshot%ww)
+    if (allocated(input_snapshot%up)) deallocate(input_snapshot%up)
+    if (allocated(input_snapshot%fnix)) deallocate(input_snapshot%fnix)
+    if (allocated(input_snapshot%fniy)) deallocate(input_snapshot%fniy)
+    if (allocated(input_snapshot%vparx)) deallocate(input_snapshot%vparx)
+    if (allocated(input_snapshot%vpary)) deallocate(input_snapshot%vpary)
+    if (allocated(input_snapshot%vradx)) deallocate(input_snapshot%vradx)
+    if (allocated(input_snapshot%vrady)) deallocate(input_snapshot%vrady)
+    if (allocated(input_snapshot%uudia)) deallocate(input_snapshot%uudia)
+    if (allocated(input_snapshot%vvdia)) deallocate(input_snapshot%vvdia)
+    if (allocated(input_snapshot%zi)) deallocate(input_snapshot%zi)
+    if (allocated(input_snapshot%te)) deallocate(input_snapshot%te)
+    if (allocated(input_snapshot%ti)) deallocate(input_snapshot%ti)
+    if (allocated(input_snapshot%pr)) deallocate(input_snapshot%pr)
+    if (allocated(input_snapshot%rr)) deallocate(input_snapshot%rr)
+    if (allocated(input_snapshot%feix)) deallocate(input_snapshot%feix)
+    if (allocated(input_snapshot%feiy)) deallocate(input_snapshot%feiy)
+    if (allocated(input_snapshot%feex)) deallocate(input_snapshot%feex)
+    if (allocated(input_snapshot%feey)) deallocate(input_snapshot%feey)
+    if (allocated(input_snapshot%vol)) deallocate(input_snapshot%vol)
+    if (allocated(input_snapshot%bfield)) deallocate(input_snapshot%bfield)
+    if (allocated(input_snapshot%bpol)) deallocate(input_snapshot%bpol)
+    if (allocated(input_snapshot%brad)) deallocate(input_snapshot%brad)
+    if (allocated(input_snapshot%btor)) deallocate(input_snapshot%btor)
+    if (allocated(input_snapshot%po)) deallocate(input_snapshot%po)
+    if (allocated(input_snapshot%deltae_parx)) &
+        deallocate(input_snapshot%deltae_parx)
+    if (allocated(input_snapshot%deltae_pary)) &
+        deallocate(input_snapshot%deltae_pary)
+    if (allocated(input_snapshot%deltae_radx)) &
+        deallocate(input_snapshot%deltae_radx)
+    if (allocated(input_snapshot%deltae_rady)) &
+        deallocate(input_snapshot%deltae_rady)
+    if (allocated(input_snapshot%deltai_parx)) &
+        deallocate(input_snapshot%deltai_parx)
+    if (allocated(input_snapshot%deltai_pary)) &
+        deallocate(input_snapshot%deltai_pary)
+    if (allocated(input_snapshot%deltai_radx)) &
+        deallocate(input_snapshot%deltai_radx)
+    if (allocated(input_snapshot%deltai_rady)) &
+        deallocate(input_snapshot%deltai_rady)
+    if (allocated(input_snapshot%delta_sheathx)) &
+        deallocate(input_snapshot%delta_sheathx)
+    if (allocated(input_snapshot%delta_sheathy)) &
+        deallocate(input_snapshot%delta_sheathy)
+    if (allocated(input_snapshot%aiso)) deallocate(input_snapshot%aiso)
+    input_snapshot%ready = .false.
+  end subroutine clear_eirene_training_input
+
+  subroutine write_eirene_training_event(b2_call, repeat_index, &
+      repeat_count, result_used_by_b2, event_kind, lstop_b2, ltime_b2, &
+      deltat_b2, b2brm_b2, b2rd_b2, b2q_b2, b2vp_b2, step_cpu_b2)
+    implicit none
+    integer, intent(in) :: b2_call, repeat_index, repeat_count
+    integer, intent(in) :: result_used_by_b2, event_kind
     logical, intent(in) :: lstop_b2, ltime_b2
     real(kind=R8), intent(in) :: deltat_b2, b2brm_b2, b2rd_b2
     real(kind=R8), intent(in) :: b2q_b2, b2vp_b2, step_cpu_b2
@@ -70,7 +227,7 @@ contains
     integer :: nds_surface_id, nds_offset_id, inventory_stratum_id
     integer :: triangle_id, cestim_atom_id, cestim_molecule_id
     integer :: cestim_ion_id
-    integer :: text8_id
+    integer :: text8_id, map_endpoint_id, map_part_id
     integer :: d2(2), d3(3), d4(4)
     character(len=256) :: filename
     character(len=32) :: event_label
@@ -93,6 +250,10 @@ contains
       write(*,*) 'EIRENE training dump requested before SNI allocation'
       return
     end if
+    if (.not.input_snapshot%ready) then
+      write(*,*) 'EIRENE training dump requested without input snapshot'
+      return
+    end if
 
     if (event_kind == 0) then
       event_label = 'single_call'
@@ -100,7 +261,7 @@ contains
       event_label = 'average_used_by_b2'
     end if
     write(filename,'(a,i8.8,a,a,a,i4.4,a)') &
-        'eirene_training_v2_b2call_', b2_call, '_', &
+        'eirene_training_v3_b2call_', b2_call, '_', &
         trim(event_label), '_', repeat_index, '.nc'
 
     status = nf_create(trim(filename), NF_CLOBBER, ncid)
@@ -117,18 +278,32 @@ contains
     call check_cdf_status(status)
     status = nf_def_dim(ncid, 'stratum_slot', size(SNI,4), stratum_id)
     call check_cdf_status(status)
-    status = nf_def_dim(ncid, 'active_stratum', size(tflux_b2), &
+    status = nf_def_dim(ncid, 'active_stratum', &
+        size(input_snapshot%tflux), &
         active_stratum_id)
     call check_cdf_status(status)
     status = nf_def_dim(ncid, 'three', 3, three_id)
     call check_cdf_status(status)
-    status = nf_def_dim(ncid, 'bra_x', size(DNIB,1), bra_x_id)
+    status = nf_def_dim(ncid, 'bra_x', size(input_snapshot%dni,1), &
+        bra_x_id)
     call check_cdf_status(status)
-    status = nf_def_dim(ncid, 'bra_y', size(DNIB,2), bra_y_id)
+    status = nf_def_dim(ncid, 'bra_y', size(input_snapshot%dni,2), &
+        bra_y_id)
     call check_cdf_status(status)
-    status = nf_def_dim(ncid, 'bra_fluid_species', size(DNIB,3), &
-        bra_fluid_id)
+    status = nf_def_dim(ncid, 'bra_fluid_species', &
+        size(input_snapshot%dni,3), bra_fluid_id)
     call check_cdf_status(status)
+
+    map_endpoint_id = -1
+    map_part_id = -1
+    if (allocated(input_snapshot%npoint)) then
+      status = nf_def_dim(ncid, 'index_map_endpoint', &
+          size(input_snapshot%npoint,1), map_endpoint_id)
+      call check_cdf_status(status)
+      status = nf_def_dim(ncid, 'index_map_part', &
+          size(input_snapshot%npoint,2), map_part_id)
+      call check_cdf_status(status)
+    end if
 
     atom_id = -1
     molecule_id = -1
@@ -256,9 +431,13 @@ contains
 
     call put_global_text(ncid, 'schema_name', &
         'solps_eirene_training_event')
-    call put_global_text(ncid, 'schema_version', '2.0.0')
+    call put_global_text(ncid, 'schema_version', '3.0.0')
     call put_global_text(ncid, 'seam', &
-        'after eirene_eirsrt; before B2 mapping, scaling, and linearization')
+        'pre-call BRAEIR snapshot; post-call raw EIRENE return')
+    call put_global_text(ncid, 'braeir_capture_phase', &
+        'immediately before eirene_eirsrt')
+    call put_global_text(ncid, 'braeir_input_indexing', &
+        'B2 indexing before EIRENE in-place index mapping')
     call put_global_text(ncid, 'event_kind', trim(event_label))
     call put_global_text(ncid, 'created_local', trim(timestamp))
     call put_global_text(ncid, 'b2_5_git', trim(b25_hash))
@@ -275,6 +454,12 @@ contains
     call put_global_int(ncid, 'b2_call_index', b2_call)
     call put_global_int(ncid, 'eirene_repeat_index', repeat_index)
     call put_global_int(ncid, 'eirene_repeat_count', repeat_count)
+    call put_global_int(ncid, 'eirene_result_used_by_b2', &
+        result_used_by_b2)
+    call put_global_int(ncid, 'eirene_index_ncutb', input_snapshot%ncutb)
+    call put_global_int(ncid, 'eirene_index_ncutl', input_snapshot%ncutl)
+    call put_global_int(ncid, 'eirene_index_targindex', &
+        input_snapshot%targindex)
     call put_global_int(ncid, 'eirene_lstop', merge(1, 0, lstop_b2))
     call put_global_int(ncid, 'eirene_ltime', merge(1, 0, ltime_b2))
     call put_global_real(ncid, 'eirene_deltat', deltat_b2)
@@ -388,93 +573,110 @@ contains
           (/atom_id, stratum_id/), 2, 'source correction factors')
     end if
 
-    call put_real(ncid, 'b2_tflux', tflux_b2, &
+    if (map_endpoint_id >= 0) then
+      call put_int(ncid, 'eirene_index_npoint', input_snapshot%npoint, &
+          (/map_endpoint_id, map_part_id/), 2, &
+          'EIRENE poloidal index-map segment endpoints')
+    end if
+
+    call put_real(ncid, 'b2_tflux', input_snapshot%tflux, &
         (/active_stratum_id/), 1, 'tflux argument passed to EIRENE')
-    call put_real(ncid, 'b2_flux_scale', flux_scale_b2, &
+    call put_real(ncid, 'b2_flux_scale', input_snapshot%flux_scale, &
         (/active_stratum_id/), 1, 'B2 post-EIRENE flux scale')
-    call put_text(ncid, 'b2_crcstra', crcstra_b2, active_stratum_id, &
+    call put_text(ncid, 'b2_crcstra', input_snapshot%crcstra, &
+        active_stratum_id, &
         'B2 stratum type code')
 
     d3 = (/bra_x_id, bra_y_id, bra_fluid_id/)
-    call put_real(ncid, 'braeir_dni', DNIB, d3, 3, &
+    call put_real(ncid, 'braeir_dni', input_snapshot%dni, d3, 3, &
         'plasma species density supplied to EIRENE')
-    call put_real(ncid, 'braeir_vv', VVB, d3, 3, &
+    call put_real(ncid, 'braeir_vv', input_snapshot%vv, d3, 3, &
         'plasma velocity quantity VVB supplied to EIRENE')
-    call put_real(ncid, 'braeir_uu', UUB, d3, 3, &
+    call put_real(ncid, 'braeir_uu', input_snapshot%uu, d3, 3, &
         'plasma velocity quantity UUB supplied to EIRENE')
-    call put_real(ncid, 'braeir_ww', WWB, d3, 3, &
+    call put_real(ncid, 'braeir_ww', input_snapshot%ww, d3, 3, &
         'plasma velocity quantity WWB supplied to EIRENE')
-    call put_real(ncid, 'braeir_up', UPB, d3, 3, &
+    call put_real(ncid, 'braeir_up', input_snapshot%up, d3, 3, &
         'parallel velocity supplied to EIRENE')
-    call put_real(ncid, 'braeir_fnix', FNIXB, d3, 3, &
+    call put_real(ncid, 'braeir_fnix', input_snapshot%fnix, d3, 3, &
         'x plasma particle flux supplied to EIRENE')
-    call put_real(ncid, 'braeir_fniy', FNIYB, d3, 3, &
+    call put_real(ncid, 'braeir_fniy', input_snapshot%fniy, d3, 3, &
         'y plasma particle flux supplied to EIRENE')
-    call put_real(ncid, 'braeir_vparx', VPARXB, d3, 3, &
+    call put_real(ncid, 'braeir_vparx', input_snapshot%vparx, d3, 3, &
         'x parallel-velocity projection supplied to EIRENE')
-    call put_real(ncid, 'braeir_vpary', VPARYB, d3, 3, &
+    call put_real(ncid, 'braeir_vpary', input_snapshot%vpary, d3, 3, &
         'y parallel-velocity projection supplied to EIRENE')
-    call put_real(ncid, 'braeir_vradx', VRADXB, d3, 3, &
+    call put_real(ncid, 'braeir_vradx', input_snapshot%vradx, d3, 3, &
         'x radial-velocity projection supplied to EIRENE')
-    call put_real(ncid, 'braeir_vrady', VRADYB, d3, 3, &
+    call put_real(ncid, 'braeir_vrady', input_snapshot%vrady, d3, 3, &
         'y radial-velocity projection supplied to EIRENE')
-    call put_real(ncid, 'braeir_uudia', UUDIAB, d3, 3, &
+    call put_real(ncid, 'braeir_uudia', input_snapshot%uudia, d3, 3, &
         'diamagnetic velocity quantity UUDIAB supplied to EIRENE')
-    call put_real(ncid, 'braeir_vvdia', VVDIAB, d3, 3, &
+    call put_real(ncid, 'braeir_vvdia', input_snapshot%vvdia, d3, 3, &
         'diamagnetic velocity quantity VVDIAB supplied to EIRENE')
-    call put_real(ncid, 'braeir_zi', ZIB, d3, 3, &
+    call put_real(ncid, 'braeir_zi', input_snapshot%zi, d3, 3, &
         'plasma charge quantity supplied to EIRENE')
 
     d2 = (/bra_x_id, bra_y_id/)
-    call put_real(ncid, 'braeir_te', TEB, d2, 2, &
+    call put_real(ncid, 'braeir_te', input_snapshot%te, d2, 2, &
         'electron temperature supplied to EIRENE')
-    call put_real(ncid, 'braeir_ti', TIB, d2, 2, &
+    call put_real(ncid, 'braeir_ti', input_snapshot%ti, d2, 2, &
         'ion temperature supplied to EIRENE')
-    call put_real(ncid, 'braeir_pr', PRB, d2, 2, &
+    call put_real(ncid, 'braeir_pr', input_snapshot%pr, d2, 2, &
         'plasma pressure quantity supplied to EIRENE')
-    call put_real(ncid, 'braeir_rr', RRB, d2, 2, &
+    call put_real(ncid, 'braeir_rr', input_snapshot%rr, d2, 2, &
         'major radius supplied to EIRENE')
-    call put_real(ncid, 'braeir_feix', FEIXB, d2, 2, &
+    call put_real(ncid, 'braeir_feix', input_snapshot%feix, d2, 2, &
         'x ion-energy flux supplied to EIRENE')
-    call put_real(ncid, 'braeir_feiy', FEIYB, d2, 2, &
+    call put_real(ncid, 'braeir_feiy', input_snapshot%feiy, d2, 2, &
         'y ion-energy flux supplied to EIRENE')
-    call put_real(ncid, 'braeir_feex', FEEXB, d2, 2, &
+    call put_real(ncid, 'braeir_feex', input_snapshot%feex, d2, 2, &
         'x electron-energy flux supplied to EIRENE')
-    call put_real(ncid, 'braeir_feey', FEEYB, d2, 2, &
+    call put_real(ncid, 'braeir_feey', input_snapshot%feey, d2, 2, &
         'y electron-energy flux supplied to EIRENE')
-    call put_real(ncid, 'braeir_vol', VOLB, d2, 2, &
+    call put_real(ncid, 'braeir_vol', input_snapshot%vol, d2, 2, &
         'cell volume supplied to EIRENE')
-    call put_real(ncid, 'braeir_bfield', BFELDB, d2, 2, &
+    call put_real(ncid, 'braeir_bfield', input_snapshot%bfield, d2, 2, &
         'magnetic-field magnitude supplied to EIRENE')
-    call put_real(ncid, 'braeir_bpol', BPOLB, d2, 2, &
+    call put_real(ncid, 'braeir_bpol', input_snapshot%bpol, d2, 2, &
         'poloidal magnetic field supplied to EIRENE')
-    call put_real(ncid, 'braeir_brad', BRADB, d2, 2, &
+    call put_real(ncid, 'braeir_brad', input_snapshot%brad, d2, 2, &
         'radial magnetic field supplied to EIRENE')
-    call put_real(ncid, 'braeir_btor', BTORB, d2, 2, &
+    call put_real(ncid, 'braeir_btor', input_snapshot%btor, d2, 2, &
         'toroidal magnetic field supplied to EIRENE')
-    call put_real(ncid, 'braeir_deltae_parx', DELTAE_PARXB, d2, 2, &
+    call put_real(ncid, 'braeir_deltae_parx', &
+        input_snapshot%deltae_parx, d2, 2, &
         'electron parallel-energy correction x')
-    call put_real(ncid, 'braeir_deltae_pary', DELTAE_PARYB, d2, 2, &
+    call put_real(ncid, 'braeir_deltae_pary', &
+        input_snapshot%deltae_pary, d2, 2, &
         'electron parallel-energy correction y')
-    call put_real(ncid, 'braeir_deltae_radx', DELTAE_RADXB, d2, 2, &
+    call put_real(ncid, 'braeir_deltae_radx', &
+        input_snapshot%deltae_radx, d2, 2, &
         'electron radial-energy correction x')
-    call put_real(ncid, 'braeir_deltae_rady', DELTAE_RADYB, d2, 2, &
+    call put_real(ncid, 'braeir_deltae_rady', &
+        input_snapshot%deltae_rady, d2, 2, &
         'electron radial-energy correction y')
-    call put_real(ncid, 'braeir_deltai_parx', DELTAI_PARXB, d2, 2, &
+    call put_real(ncid, 'braeir_deltai_parx', &
+        input_snapshot%deltai_parx, d2, 2, &
         'ion parallel-energy correction x')
-    call put_real(ncid, 'braeir_deltai_pary', DELTAI_PARYB, d2, 2, &
+    call put_real(ncid, 'braeir_deltai_pary', &
+        input_snapshot%deltai_pary, d2, 2, &
         'ion parallel-energy correction y')
-    call put_real(ncid, 'braeir_deltai_radx', DELTAI_RADXB, d2, 2, &
+    call put_real(ncid, 'braeir_deltai_radx', &
+        input_snapshot%deltai_radx, d2, 2, &
         'ion radial-energy correction x')
-    call put_real(ncid, 'braeir_deltai_rady', DELTAI_RADYB, d2, 2, &
+    call put_real(ncid, 'braeir_deltai_rady', &
+        input_snapshot%deltai_rady, d2, 2, &
         'ion radial-energy correction y')
-    call put_real(ncid, 'braeir_delta_sheathx', DELTA_SHEATHXB, d2, 2, &
+    call put_real(ncid, 'braeir_delta_sheathx', &
+        input_snapshot%delta_sheathx, d2, 2, &
         'sheath-energy correction x')
-    call put_real(ncid, 'braeir_delta_sheathy', DELTA_SHEATHYB, d2, 2, &
+    call put_real(ncid, 'braeir_delta_sheathy', &
+        input_snapshot%delta_sheathy, d2, 2, &
         'sheath-energy correction y')
-    call put_real(ncid, 'braeir_aiso', AISOB, d2, 2, &
+    call put_real(ncid, 'braeir_aiso', input_snapshot%aiso, d2, 2, &
         'isotropy quantity supplied to EIRENE')
-    call put_real(ncid, 'braeir_po', POB, d2, 2, &
+    call put_real(ncid, 'braeir_po', input_snapshot%po, d2, 2, &
         'electrostatic potential supplied to EIRENE')
 
     if (wneu_x_id >= 0) then

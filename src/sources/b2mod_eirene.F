@@ -20,7 +20,8 @@
       use b2mod_b2cmpa
       use b2mod_b2cmpb
       use b2mod_eirene_training_dump
-     & ,only : write_eirene_training_event
+     & ,only : capture_eirene_training_input,
+     &         write_eirene_training_event
       use b2mod_balance !djm Jan2017
      & ,only : eirene_mc_papl_sna0to1, eirene_mc_pmpl_sna0to1,
      &         eirene_mc_pael_sne0to1, eirene_mc_pmel_sne0to1,
@@ -262,7 +263,8 @@ c      data lis_hlp / 110, 111, 112, 49 /
 
       integer output_style, linearisation, save_f31,
      1 repeat_first_call, ionising_core, dpc_fix, eircount,
-     2 no_sseicorr, save_f30, stab_corr, training_dump
+     2 no_sseicorr, save_f30, stab_corr, training_dump,
+     3 training_repeat_count, training_result_used
       save ncall, output_style,
      * pfrregno1, pfrregno2, solregno, isfeedback, b2stbc_feedback,
      * nesepm_sol, nesepm_pfr, ndes, private_flux_puff, nesepm_istra,
@@ -943,14 +945,28 @@ c           calculated at the end of the previous real time step
             call reinitialize_fort_file(15)
           endif
 c         SINGLE EIRENE CALL
+          if(training_dump.ne.0) then
+            if(n_avg_repeat.gt.1) then
+              training_repeat_count=n_avg_repeat
+              training_result_used=0
+            elseif(ncall.eq.0.and.repeat_first_call.gt.0) then
+              training_repeat_count=repeat_first_call+1
+              training_result_used=0
+            else
+              training_repeat_count=1
+              training_result_used=1
+            endif
+            call capture_eirene_training_input(tflux,flux_scale,
+     *        crcstra(1:size(tflux)))
+          endif
           call eirene_eirsrt(last,my_ltime,eirene_step_dt,tflux,
      *     b2brem,b2rad,b2qie(0),b2vdp,
      1     eirene_step_cpu)
           if(training_dump.ne.0) then
             call write_eirene_training_event(ncall,eircount+1,
-     *        n_avg_repeat,0,tflux,flux_scale,
-     1        crcstra(1:size(tflux)),last,my_ltime,eirene_step_dt,
-     2        b2brem,b2rad,b2qie(0),b2vdp,eirene_step_cpu)
+     *        training_repeat_count,training_result_used,0,last,
+     1        my_ltime,eirene_step_dt,b2brem,b2rad,b2qie(0),b2vdp,
+     2        eirene_step_cpu)
           endif
 c         Cumulate source terms from past and current Eirene calls
           if(n_avg_repeat.gt.1) then
@@ -967,10 +983,9 @@ c         Calculate averaged source terms from all Eirene calls, if using repeat
           call calc_average_source_arrays(n_avg_repeat,
      *      write_eirene_sources)
           if(training_dump.ne.0) then
-            call write_eirene_training_event(ncall,0,n_avg_repeat,1,
-     *        tflux,flux_scale,crcstra(1:size(tflux)),last,my_ltime,
-     1        eirene_step_dt,b2brem,b2rad,b2qie(0),b2vdp,
-     2        eirene_step_cpu)
+            call write_eirene_training_event(ncall,0,n_avg_repeat,1,1,
+     *        last,my_ltime,eirene_step_dt,b2brem,b2rad,b2qie(0),
+     1        b2vdp,eirene_step_cpu)
           endif
         endif
 
@@ -1007,15 +1022,21 @@ c         Calculate averaged source terms from all Eirene calls, if using repeat
               call copy_background(nx,ny,ns,BoRiS)
 csw 25jan2011 LTIME=.false. in eirsrt call
               my_ltime=.false.
+              if(training_dump.ne.0) then
+                call capture_eirene_training_input(tflux,flux_scale,
+     *            crcstra(1:size(tflux)))
+              endif
               call eirene_eirsrt(last,my_ltime,eirene_step_dt,tflux,
      *         b2brem,b2rad,b2qie(0),b2vdp,
      1         eirene_step_cpu)
               if(training_dump.ne.0) then
+                training_result_used=0
+                if(eircount.eq.repeat_first_call)
+     *            training_result_used=1
                 call write_eirene_training_event(ncall,eircount+1,
-     *            repeat_first_call+1,0,tflux,flux_scale,
-     1            crcstra(1:size(tflux)),last,my_ltime,
-     2            eirene_step_dt,b2brem,b2rad,b2qie(0),b2vdp,
-     3            eirene_step_cpu)
+     *            repeat_first_call+1,training_result_used,0,last,
+     1            my_ltime,eirene_step_dt,b2brem,b2rad,b2qie(0),
+     2            b2vdp,eirene_step_cpu)
               endif
               eircount=eircount+1
             enddo

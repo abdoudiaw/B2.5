@@ -22,6 +22,7 @@ CORE_OUTPUTS = (
 )
 REQUIRED_INPUTS = ("braeir_dni", "braeir_te", "braeir_ti", "braeir_vol")
 REQUIRED_METADATA = ("b2_tflux", "b2_flux_scale", "b2_crcstra")
+REQUIRED_V3_METADATA = ("eirene_index_npoint",)
 REQUIRED_WNEUTRALS = (
     "wneutrals_dab2",
     "wneutrals_dmb2",
@@ -110,18 +111,30 @@ def event_files(path: Path) -> list[Path]:
     return sorted(path.glob("eirene_training_v*_b2call_*.nc"))
 
 
-def validate_file(path: Path) -> tuple[int, str, dict[str, np.ndarray]]:
+def validate_file(
+    path: Path,
+) -> tuple[int, str, int, int, int, dict[str, np.ndarray]]:
     arrays: dict[str, np.ndarray] = {}
     with netCDF4.Dataset(path) as dataset:
         if dataset.getncattr("schema_name") != "solps_eirene_training_event":
             raise ValueError(f"{path}: unexpected schema_name")
         schema_version = str(dataset.getncattr("schema_version"))
-        if schema_version not in ("1.0.0", "2.0.0"):
+        if schema_version not in ("1.0.0", "2.0.0", "3.0.0"):
             raise ValueError(f"{path}: unexpected schema_version")
 
         required = CORE_OUTPUTS + REQUIRED_INPUTS + REQUIRED_METADATA
-        if schema_version == "2.0.0":
+        if schema_version in ("2.0.0", "3.0.0"):
             required += REQUIRED_WNEUTRALS
+        if schema_version == "3.0.0":
+            required += REQUIRED_V3_METADATA
+            if dataset.getncattr("braeir_capture_phase") != (
+                "immediately before eirene_eirsrt"
+            ):
+                raise ValueError(f"{path}: unexpected BRAEIR capture phase")
+            if not str(dataset.getncattr("braeir_input_indexing")).startswith(
+                "B2 indexing"
+            ):
+                raise ValueError(f"{path}: unexpected BRAEIR input indexing")
         missing = [name for name in required if name not in dataset.variables]
         if missing:
             raise ValueError(f"{path}: missing variables: {', '.join(missing)}")
@@ -142,9 +155,17 @@ def validate_file(path: Path) -> tuple[int, str, dict[str, np.ndarray]]:
 
         b2_call = int(dataset.getncattr("b2_call_index"))
         kind = str(dataset.getncattr("event_kind"))
+        repeat_index = int(dataset.getncattr("eirene_repeat_index"))
+        repeat_count = int(dataset.getncattr("eirene_repeat_count"))
+        result_used = int(
+            dataset.getncattr("eirene_result_used_by_b2")
+            if schema_version == "3.0.0"
+            else -1
+        )
         strata = "".join(dataset.variables["b2_crcstra"][:].astype(str))
         print(
             f"PASS {path.name}: kind={kind} b2_call={b2_call} "
+            f"repeat={repeat_index}/{repeat_count} used_by_b2={result_used} "
             f"strata={strata!r} variables={len(dataset.variables)}"
         )
         for name in CORE_OUTPUTS:
@@ -156,18 +177,58 @@ def validate_file(path: Path) -> tuple[int, str, dict[str, np.ndarray]]:
                 f"min={values.min(): .5e} max={values.max(): .5e}"
             )
 
-    return b2_call, kind, arrays
+    return b2_call, kind, repeat_index, repeat_count, result_used, arrays
+
+
+def validate_repeat_metadata(
+    events: list[
+        tuple[Path, int, str, int, int, int, dict[str, np.ndarray]]
+    ],
+) -> None:
+    by_call: dict[
+        int, list[tuple[Path, str, int, int, int, dict[str, np.ndarray]]]
+    ] = defaultdict(list)
+    for path, b2_call, kind, index, count, used, arrays in events:
+        by_call[b2_call].append((path, kind, index, count, used, arrays))
+
+    for b2_call, group in sorted(by_call.items()):
+        singles = [item for item in group if item[1] == "single_call"]
+        if not singles or any(item[4] < 0 for item in singles):
+            continue
+        counts = {item[3] for item in singles}
+        indices = sorted(item[2] for item in singles)
+        if len(counts) != 1 or indices != list(range(1, len(singles) + 1)):
+            raise ValueError(f"B2 call {b2_call}: inconsistent repeat metadata")
+        count = counts.pop()
+        if count != len(singles):
+            raise ValueError(
+                f"B2 call {b2_call}: repeat_count={count}, "
+                f"but found {len(singles)} single-call events"
+            )
+
+        averages = [item for item in group if item[1] == "average_used_by_b2"]
+        used = [item for item in group if item[4] == 1]
+        if len(used) != 1:
+            raise ValueError(
+                f"B2 call {b2_call}: expected exactly one result used by B2"
+            )
+        if averages and used[0][1] != "average_used_by_b2":
+            raise ValueError(
+                f"B2 call {b2_call}: averaged result is not marked used by B2"
+            )
 
 
 def validate_averages(
-    events: list[tuple[Path, int, str, dict[str, np.ndarray]]],
+    events: list[
+        tuple[Path, int, str, int, int, int, dict[str, np.ndarray]]
+    ],
     rtol: float,
     atol: float,
 ) -> None:
     by_call: dict[int, list[tuple[Path, str, dict[str, np.ndarray]]]] = (
         defaultdict(list)
     )
-    for path, b2_call, kind, arrays in events:
+    for path, b2_call, kind, _, _, _, arrays in events:
         by_call[b2_call].append((path, kind, arrays))
 
     for b2_call, group in sorted(by_call.items()):
@@ -210,8 +271,9 @@ def main() -> int:
 
     events = []
     for path in files:
-        b2_call, kind, arrays = validate_file(path)
-        events.append((path, b2_call, kind, arrays))
+        event = validate_file(path)
+        events.append((path, *event))
+    validate_repeat_metadata(events)
     validate_averages(events, args.rtol, args.atol)
     print(f"PASS validated {len(files)} EIRENE training event(s)")
     return 0
