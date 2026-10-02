@@ -66,6 +66,9 @@
       integer, save :: nhist = 1, nrelax = 0, n_avg_repeat = 1
       real (kind=R8), save, allocatable ::
      .  sni_av(:,:,:,:), smo_av(:,:,:,:), sei_av(:,:,:), see_av(:,:,:)
+      real (kind=R8), save, allocatable ::
+     .  delta_sheathxb_eirene_input(:,:),
+     .  delta_sheathyb_eirene_input(:,:)
 
       real (kind=R8), save, allocatable ::                        !djm Jan2017
      .  sne_av_pael(:,:,:), sne_av_pmel(:,:,:), sne_av_piel(:,:,:),
@@ -919,6 +922,7 @@ cxpb !!!!!!!!!!!!!!!!!!!!!!!!!!! EIRENE CALL(S) HERE !!!!!!!!!!!!!!!!!!!!!!!!!!
 csw 25jan2011 LTIME=.false. in eirsrt call
 
         write(*,*) 'Main Eirene call'
+        call save_eirene_sheath_input
         if(n_avg_repeat.gt.1) then
 c         Store the fort.xx files existing at the beginning of the time step
 c         to fort.xx.init files, to avoid being overwritten by the false
@@ -933,6 +937,7 @@ c       Main cycle: repeat Eirene calls n_avg_repeat times (default = 1)
             write(*,*) 'Using Eirene source averaging:'
             write(*,*) 'repeated call n. ', eircount+1
             call copy_background(nx,ny,ns,BoRiS)
+            call restore_eirene_sheath_input
           endif
           my_ltime=.false.
           filename=fort_lc//'44'
@@ -1020,6 +1025,7 @@ c         Calculate averaged source terms from all Eirene calls, if using repeat
           if(ncall.eq.0.and.repeat_first_call.gt.0) then
             do while (eircount.le.repeat_first_call)
               call copy_background(nx,ny,ns,BoRiS)
+              call restore_eirene_sheath_input
 csw 25jan2011 LTIME=.false. in eirsrt call
               my_ltime=.false.
               if(training_dump.ne.0) then
@@ -1042,6 +1048,9 @@ csw 25jan2011 LTIME=.false. in eirsrt call
             enddo
           endif
         endif
+
+        call restore_eirene_sheath_input
+        call clear_eirene_sheath_input
 
         if(ncall.eq.0) then
           write(*,*) 'Calling post_couple'
@@ -4459,6 +4468,41 @@ c     .     ('Negative eirene_ionising_core must be used with BCCON=13')
       call subend ()
       return
       end subroutine eirene_mc
+
+      subroutine save_eirene_sheath_input
+      implicit none
+
+      call clear_eirene_sheath_input
+      allocate(delta_sheathxb_eirene_input,
+     . source=delta_sheathxb)
+      allocate(delta_sheathyb_eirene_input,
+     . source=delta_sheathyb)
+
+      return
+      end subroutine save_eirene_sheath_input
+
+      subroutine restore_eirene_sheath_input
+      implicit none
+
+      call xertst(allocated(delta_sheathxb_eirene_input).and.
+     .            allocated(delta_sheathyb_eirene_input),
+     .            'Eirene sheath input not saved')
+      delta_sheathxb=delta_sheathxb_eirene_input
+      delta_sheathyb=delta_sheathyb_eirene_input
+
+      return
+      end subroutine restore_eirene_sheath_input
+
+      subroutine clear_eirene_sheath_input
+      implicit none
+
+      if(allocated(delta_sheathxb_eirene_input))
+     .  deallocate(delta_sheathxb_eirene_input)
+      if(allocated(delta_sheathyb_eirene_input))
+     .  deallocate(delta_sheathyb_eirene_input)
+
+      return
+      end subroutine clear_eirene_sheath_input
 
 * ..finalise save
       subroutine eirene_mc_final(nx,ny,ns,BoRiS)

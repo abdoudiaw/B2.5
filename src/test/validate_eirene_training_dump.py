@@ -149,9 +149,11 @@ def validate_file(
             if (
                 name in CORE_OUTPUTS
                 or name.startswith("braeir_")
+                or name in ("b2_tflux", "b2_flux_scale")
                 or name in AVERAGED_WNEUTRALS
             ):
                 arrays[name] = values
+        arrays["b2_crcstra"] = np.asarray(dataset.variables["b2_crcstra"][:])
 
         b2_call = int(dataset.getncattr("b2_call_index"))
         kind = str(dataset.getncattr("event_kind"))
@@ -218,6 +220,43 @@ def validate_repeat_metadata(
             )
 
 
+def validate_repeat_inputs(
+    events: list[
+        tuple[Path, int, str, int, int, int, dict[str, np.ndarray]]
+    ],
+) -> None:
+    by_call: dict[
+        int, list[tuple[Path, int, dict[str, np.ndarray]]]
+    ] = defaultdict(list)
+    for path, b2_call, kind, index, _, used, arrays in events:
+        if kind == "single_call" and used >= 0:
+            by_call[b2_call].append((path, index, arrays))
+
+    for b2_call, group in sorted(by_call.items()):
+        if len(group) < 2:
+            continue
+        group.sort(key=lambda item: item[1])
+        reference_path, _, reference = group[0]
+        input_names = sorted(
+            name
+            for name in reference
+            if name.startswith("braeir_") or name.startswith("b2_")
+        )
+        for path, _, arrays in group[1:]:
+            for name in input_names:
+                if not np.array_equal(reference[name], arrays[name]):
+                    mismatch = int(np.count_nonzero(reference[name] != arrays[name]))
+                    raise ValueError(
+                        f"B2 call {b2_call}: {name} differs between "
+                        f"{reference_path.name} and {path.name} "
+                        f"at {mismatch} entries"
+                    )
+        print(
+            f"PASS B2 call {b2_call}: {len(group)} repeats have "
+            f"bit-identical inputs ({len(input_names)} fields)"
+        )
+
+
 def validate_averages(
     events: list[
         tuple[Path, int, str, int, int, int, dict[str, np.ndarray]]
@@ -274,6 +313,7 @@ def main() -> int:
         event = validate_file(path)
         events.append((path, *event))
     validate_repeat_metadata(events)
+    validate_repeat_inputs(events)
     validate_averages(events, args.rtol, args.atol)
     print(f"PASS validated {len(files)} EIRENE training event(s)")
     return 0
