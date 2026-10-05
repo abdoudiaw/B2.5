@@ -43,6 +43,7 @@ module b2mod_eirene_training_dump
 
   type :: braeir_input_snapshot
     logical :: ready = .false.
+    integer :: b2_nx = 0, b2_ny = 0
     integer :: ncutb = 0, ncutl = 0, targindex = 0
     real(kind=R8), allocatable :: tflux(:), flux_scale(:)
     character(len=1), allocatable :: crcstra(:)
@@ -74,9 +75,10 @@ module b2mod_eirene_training_dump
 
 contains
 
-  subroutine capture_eirene_training_input(tflux_b2, flux_scale_b2, &
-      crcstra_b2)
+  subroutine capture_eirene_training_input(nx_b2, ny_b2, tflux_b2, &
+      flux_scale_b2, crcstra_b2)
     implicit none
+    integer, intent(in) :: nx_b2, ny_b2
     real(kind=R8), intent(in) :: tflux_b2(:), flux_scale_b2(:)
     character(len=1), intent(in) :: crcstra_b2(:)
 
@@ -91,46 +93,68 @@ contains
     allocate(input_snapshot%tflux, source=tflux_b2)
     allocate(input_snapshot%flux_scale, source=flux_scale_b2)
     allocate(input_snapshot%crcstra, source=crcstra_b2)
-    allocate(input_snapshot%dni, source=DNIB)
-    allocate(input_snapshot%vv, source=VVB)
-    allocate(input_snapshot%uu, source=UUB)
-    allocate(input_snapshot%ww, source=WWB)
-    allocate(input_snapshot%up, source=UPB)
-    allocate(input_snapshot%fnix, source=FNIXB)
-    allocate(input_snapshot%fniy, source=FNIYB)
-    allocate(input_snapshot%vparx, source=VPARXB)
-    allocate(input_snapshot%vpary, source=VPARYB)
-    allocate(input_snapshot%vradx, source=VRADXB)
-    allocate(input_snapshot%vrady, source=VRADYB)
-    allocate(input_snapshot%uudia, source=UUDIAB)
-    allocate(input_snapshot%vvdia, source=VVDIAB)
-    allocate(input_snapshot%zi, source=ZIB)
-    allocate(input_snapshot%te, source=TEB)
-    allocate(input_snapshot%ti, source=TIB)
-    allocate(input_snapshot%pr, source=PRB)
-    allocate(input_snapshot%rr, source=RRB)
-    allocate(input_snapshot%feix, source=FEIXB)
-    allocate(input_snapshot%feiy, source=FEIYB)
-    allocate(input_snapshot%feex, source=FEEXB)
-    allocate(input_snapshot%feey, source=FEEYB)
-    allocate(input_snapshot%vol, source=VOLB)
-    allocate(input_snapshot%bfield, source=BFELDB)
-    allocate(input_snapshot%bpol, source=BPOLB)
-    allocate(input_snapshot%brad, source=BRADB)
-    allocate(input_snapshot%btor, source=BTORB)
-    allocate(input_snapshot%deltae_parx, source=DELTAE_PARXB)
-    allocate(input_snapshot%deltae_pary, source=DELTAE_PARYB)
-    allocate(input_snapshot%deltae_radx, source=DELTAE_RADXB)
-    allocate(input_snapshot%deltae_rady, source=DELTAE_RADYB)
-    allocate(input_snapshot%deltai_parx, source=DELTAI_PARXB)
-    allocate(input_snapshot%deltai_pary, source=DELTAI_PARYB)
-    allocate(input_snapshot%deltai_radx, source=DELTAI_RADXB)
-    allocate(input_snapshot%deltai_rady, source=DELTAI_RADYB)
-    allocate(input_snapshot%delta_sheathx, source=DELTA_SHEATHXB)
-    allocate(input_snapshot%delta_sheathy, source=DELTA_SHEATHYB)
-    allocate(input_snapshot%aiso, source=AISOB)
-    allocate(input_snapshot%po, source=POB)
+    allocate(input_snapshot%dni, &
+        source=DNIB(0:nx_b2+1,0:ny_b2+1,:))
+    allocate(input_snapshot%vv, source=VVB(0:nx_b2+1,0:ny_b2+1,:))
+    allocate(input_snapshot%uu, source=UUB(0:nx_b2+1,0:ny_b2+1,:))
+    allocate(input_snapshot%ww, source=WWB(0:nx_b2+1,0:ny_b2+1,:))
+    allocate(input_snapshot%up, source=UPB(0:nx_b2+1,0:ny_b2+1,:))
+    allocate(input_snapshot%fnix, &
+        source=FNIXB(0:nx_b2+1,0:ny_b2+1,:))
+    allocate(input_snapshot%fniy, &
+        source=FNIYB(0:nx_b2+1,0:ny_b2+1,:))
+    allocate(input_snapshot%vparx, &
+        source=VPARXB(0:nx_b2+1,0:ny_b2+1,:))
+    allocate(input_snapshot%vpary, &
+        source=VPARYB(0:nx_b2+1,0:ny_b2+1,:))
+    allocate(input_snapshot%vradx, &
+        source=VRADXB(0:nx_b2+1,0:ny_b2+1,:))
+    allocate(input_snapshot%vrady, &
+        source=VRADYB(0:nx_b2+1,0:ny_b2+1,:))
+    allocate(input_snapshot%uudia, &
+        source=UUDIAB(0:nx_b2+1,0:ny_b2+1,:))
+    allocate(input_snapshot%vvdia, &
+        source=VVDIAB(0:nx_b2+1,0:ny_b2+1,:))
+    allocate(input_snapshot%zi, source=ZIB(0:nx_b2+1,0:ny_b2+1,:))
+    allocate(input_snapshot%te, source=TEB(0:nx_b2+1,0:ny_b2+1))
+    allocate(input_snapshot%ti, source=TIB(0:nx_b2+1,0:ny_b2+1))
+    allocate(input_snapshot%pr, source=PRB(0:nx_b2+1,0:ny_b2+1))
+    allocate(input_snapshot%rr, source=RRB(0:nx_b2+1,0:ny_b2+1))
+    allocate(input_snapshot%feix, source=FEIXB(0:nx_b2+1,0:ny_b2+1))
+    allocate(input_snapshot%feiy, source=FEIYB(0:nx_b2+1,0:ny_b2+1))
+    allocate(input_snapshot%feex, source=FEEXB(0:nx_b2+1,0:ny_b2+1))
+    allocate(input_snapshot%feey, source=FEEYB(0:nx_b2+1,0:ny_b2+1))
+    allocate(input_snapshot%vol, source=VOLB(0:nx_b2+1,0:ny_b2+1))
+    allocate(input_snapshot%bfield, &
+        source=BFELDB(0:nx_b2+1,0:ny_b2+1))
+    allocate(input_snapshot%bpol, source=BPOLB(0:nx_b2+1,0:ny_b2+1))
+    allocate(input_snapshot%brad, source=BRADB(0:nx_b2+1,0:ny_b2+1))
+    allocate(input_snapshot%btor, source=BTORB(0:nx_b2+1,0:ny_b2+1))
+    allocate(input_snapshot%deltae_parx, &
+        source=DELTAE_PARXB(0:nx_b2+1,0:ny_b2+1))
+    allocate(input_snapshot%deltae_pary, &
+        source=DELTAE_PARYB(0:nx_b2+1,0:ny_b2+1))
+    allocate(input_snapshot%deltae_radx, &
+        source=DELTAE_RADXB(0:nx_b2+1,0:ny_b2+1))
+    allocate(input_snapshot%deltae_rady, &
+        source=DELTAE_RADYB(0:nx_b2+1,0:ny_b2+1))
+    allocate(input_snapshot%deltai_parx, &
+        source=DELTAI_PARXB(0:nx_b2+1,0:ny_b2+1))
+    allocate(input_snapshot%deltai_pary, &
+        source=DELTAI_PARYB(0:nx_b2+1,0:ny_b2+1))
+    allocate(input_snapshot%deltai_radx, &
+        source=DELTAI_RADXB(0:nx_b2+1,0:ny_b2+1))
+    allocate(input_snapshot%deltai_rady, &
+        source=DELTAI_RADYB(0:nx_b2+1,0:ny_b2+1))
+    allocate(input_snapshot%delta_sheathx, &
+        source=DELTA_SHEATHXB(0:nx_b2+1,0:ny_b2+1))
+    allocate(input_snapshot%delta_sheathy, &
+        source=DELTA_SHEATHYB(0:nx_b2+1,0:ny_b2+1))
+    allocate(input_snapshot%aiso, source=AISOB(0:nx_b2+1,0:ny_b2+1))
+    allocate(input_snapshot%po, source=POB(0:nx_b2+1,0:ny_b2+1))
 
+    input_snapshot%b2_nx = nx_b2
+    input_snapshot%b2_ny = ny_b2
     input_snapshot%ready = .true.
 #endif
   end subroutine capture_eirene_training_input
@@ -215,6 +239,8 @@ contains
     if (allocated(input_snapshot%delta_sheathy)) &
         deallocate(input_snapshot%delta_sheathy)
     if (allocated(input_snapshot%aiso)) deallocate(input_snapshot%aiso)
+    input_snapshot%b2_nx = 0
+    input_snapshot%b2_ny = 0
     input_snapshot%ncutb = 0
     input_snapshot%ncutl = 0
     input_snapshot%targindex = 0
@@ -451,13 +477,15 @@ contains
 
     call put_global_text(ncid, 'schema_name', &
         'solps_eirene_training_event')
-    call put_global_text(ncid, 'schema_version', '3.0.0')
+    call put_global_text(ncid, 'schema_version', '3.0.1')
     call put_global_text(ncid, 'seam', &
         'pre-call BRAEIR snapshot; post-call raw EIRENE return')
     call put_global_text(ncid, 'braeir_capture_phase', &
         'immediately before eirene_eirsrt')
     call put_global_text(ncid, 'braeir_input_indexing', &
         'B2 indexing before EIRENE in-place index mapping')
+    call put_global_text(ncid, 'braeir_storage_policy', &
+        'active B2 mesh including guard cells; EIRENE scratch excluded')
     call put_global_text(ncid, 'index_map_capture_phase', &
         'after eirene_eirsrt initializes EIRENE index mapping')
     call put_global_text(ncid, 'event_kind', trim(event_label))
@@ -478,6 +506,8 @@ contains
     call put_global_int(ncid, 'eirene_repeat_count', repeat_count)
     call put_global_int(ncid, 'eirene_result_used_by_b2', &
         result_used_by_b2)
+    call put_global_int(ncid, 'b2_mesh_nx_interior', input_snapshot%b2_nx)
+    call put_global_int(ncid, 'b2_mesh_ny_interior', input_snapshot%b2_ny)
     call put_global_int(ncid, 'eirene_index_ncutb', input_snapshot%ncutb)
     call put_global_int(ncid, 'eirene_index_ncutl', input_snapshot%ncutl)
     call put_global_int(ncid, 'eirene_index_targindex', &

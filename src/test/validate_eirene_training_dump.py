@@ -119,13 +119,13 @@ def validate_file(
         if dataset.getncattr("schema_name") != "solps_eirene_training_event":
             raise ValueError(f"{path}: unexpected schema_name")
         schema_version = str(dataset.getncattr("schema_version"))
-        if schema_version not in ("1.0.0", "2.0.0", "3.0.0"):
+        if schema_version not in ("1.0.0", "2.0.0", "3.0.0", "3.0.1"):
             raise ValueError(f"{path}: unexpected schema_version")
 
         required = CORE_OUTPUTS + REQUIRED_INPUTS + REQUIRED_METADATA
-        if schema_version in ("2.0.0", "3.0.0"):
+        if schema_version in ("2.0.0", "3.0.0", "3.0.1"):
             required += REQUIRED_WNEUTRALS
-        if schema_version == "3.0.0":
+        if schema_version in ("3.0.0", "3.0.1"):
             required += REQUIRED_V3_METADATA
             if dataset.getncattr("braeir_capture_phase") != (
                 "immediately before eirene_eirsrt"
@@ -135,6 +135,17 @@ def validate_file(
                 "B2 indexing"
             ):
                 raise ValueError(f"{path}: unexpected BRAEIR input indexing")
+        if schema_version == "3.0.1":
+            nx = int(dataset.getncattr("b2_mesh_nx_interior"))
+            ny = int(dataset.getncattr("b2_mesh_ny_interior"))
+            if len(dataset.dimensions["bra_x"]) != nx + 2:
+                raise ValueError(f"{path}: BRAEIR x extent is not nx+2")
+            if len(dataset.dimensions["bra_y"]) != ny + 2:
+                raise ValueError(f"{path}: BRAEIR y extent is not ny+2")
+            if "EIRENE scratch excluded" not in str(
+                dataset.getncattr("braeir_storage_policy")
+            ):
+                raise ValueError(f"{path}: unexpected BRAEIR storage policy")
         missing = [name for name in required if name not in dataset.variables]
         if missing:
             raise ValueError(f"{path}: missing variables: {', '.join(missing)}")
@@ -161,7 +172,7 @@ def validate_file(
         repeat_count = int(dataset.getncattr("eirene_repeat_count"))
         result_used = int(
             dataset.getncattr("eirene_result_used_by_b2")
-            if schema_version == "3.0.0"
+            if schema_version in ("3.0.0", "3.0.1")
             else -1
         )
         strata = "".join(dataset.variables["b2_crcstra"][:].astype(str))

@@ -961,7 +961,7 @@ c         SINGLE EIRENE CALL
               training_repeat_count=1
               training_result_used=1
             endif
-            call capture_eirene_training_input(tflux,flux_scale,
+            call capture_eirene_training_input(nx,ny,tflux,flux_scale,
      *        crcstra(1:size(tflux)))
           endif
           call eirene_eirsrt(last,my_ltime,eirene_step_dt,tflux,
@@ -1029,8 +1029,8 @@ c         Calculate averaged source terms from all Eirene calls, if using repeat
 csw 25jan2011 LTIME=.false. in eirsrt call
               my_ltime=.false.
               if(training_dump.ne.0) then
-                call capture_eirene_training_input(tflux,flux_scale,
-     *            crcstra(1:size(tflux)))
+                call capture_eirene_training_input(nx,ny,tflux,
+     *            flux_scale,crcstra(1:size(tflux)))
               endif
               call eirene_eirsrt(last,my_ltime,eirene_step_dt,tflux,
      *         b2brem,b2rad,b2qie(0),b2vdp,
