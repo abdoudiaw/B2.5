@@ -131,15 +131,31 @@ contains
     allocate(input_snapshot%aiso, source=AISOB)
     allocate(input_snapshot%po, source=POB)
 
-    if (associated(map_ncutb)) input_snapshot%ncutb = map_ncutb
-    if (associated(map_ncutl)) input_snapshot%ncutl = map_ncutl
-    input_snapshot%targindex = map_targindex
-    if (allocated(map_npoint)) then
-      allocate(input_snapshot%npoint, source=map_npoint)
-    end if
     input_snapshot%ready = .true.
 #endif
   end subroutine capture_eirene_training_input
+
+  logical function complete_eirene_training_index_map()
+    implicit none
+
+    complete_eirene_training_index_map = .false.
+#ifdef B25_EIRENE
+    if (.not.associated(map_ncutb) .or. &
+        .not.associated(map_ncutl) .or. &
+        .not.allocated(map_npoint)) then
+      write(*,*) 'EIRENE training dump skipped: index map not initialized'
+      return
+    end if
+
+    input_snapshot%ncutb = map_ncutb
+    input_snapshot%ncutl = map_ncutl
+    input_snapshot%targindex = map_targindex
+    if (allocated(input_snapshot%npoint)) &
+        deallocate(input_snapshot%npoint)
+    allocate(input_snapshot%npoint, source=map_npoint)
+    complete_eirene_training_index_map = .true.
+#endif
+  end function complete_eirene_training_index_map
 
   subroutine clear_eirene_training_input()
     implicit none
@@ -199,6 +215,9 @@ contains
     if (allocated(input_snapshot%delta_sheathy)) &
         deallocate(input_snapshot%delta_sheathy)
     if (allocated(input_snapshot%aiso)) deallocate(input_snapshot%aiso)
+    input_snapshot%ncutb = 0
+    input_snapshot%ncutl = 0
+    input_snapshot%targindex = 0
     input_snapshot%ready = .false.
   end subroutine clear_eirene_training_input
 
@@ -254,6 +273,7 @@ contains
       write(*,*) 'EIRENE training dump requested without input snapshot'
       return
     end if
+    if (.not.complete_eirene_training_index_map()) return
 
     if (event_kind == 0) then
       event_label = 'single_call'
@@ -438,6 +458,8 @@ contains
         'immediately before eirene_eirsrt')
     call put_global_text(ncid, 'braeir_input_indexing', &
         'B2 indexing before EIRENE in-place index mapping')
+    call put_global_text(ncid, 'index_map_capture_phase', &
+        'after eirene_eirsrt initializes EIRENE index mapping')
     call put_global_text(ncid, 'event_kind', trim(event_label))
     call put_global_text(ncid, 'created_local', trim(timestamp))
     call put_global_text(ncid, 'b2_5_git', trim(b25_hash))
