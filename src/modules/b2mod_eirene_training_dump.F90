@@ -72,6 +72,7 @@ module b2mod_eirene_training_dump
 
   public :: capture_eirene_training_input
   public :: write_eirene_training_event
+  public :: replay_eirene_training_event
 
 contains
 
@@ -1121,6 +1122,225 @@ contains
     call check_cdf_status(status)
     deallocate(characters)
   end subroutine put_text8
+#endif
+
+  ! Replay test hook: replace what EIRENE just returned with the content of
+  ! a stored event, so that one B2.5 step can be repeated from a file.
+  ! mode 1 replays every dynamic return array and scalar (control).
+  ! mode 2 replays only what B2.5 feeds back into the plasma equations
+  !        (the four sources per stratum and the wall tallies B2.5 turns
+  !        into the core-boundary neutral flux) and zeroes the rest.
+  ! Configuration arrays (surface types, areas, index maps) are not touched.
+  ! Rank 0 only, like the writer; B2.5 consumes the arrays on rank 0.
+  subroutine replay_eirene_training_event(path, mode, b2brm, b2rd, b2q, b2vp)
+    implicit none
+    character(len=*), intent(in) :: path
+    integer, intent(in) :: mode
+    real(kind=R8), intent(inout) :: b2brm, b2rd, b2q, b2vp
+#if defined(B25_EIRENE) && !defined(NO_CDF)
+#include <netcdf.inc>
+    integer :: status, ncid, mpi_rank, mpi_error
+    logical :: full
+    external :: check_cdf_status, xerrab
+
+    call mpi_comm_rank(mpi_comm_world, mpi_rank, mpi_error)
+    if (mpi_rank /= 0) return
+    full = mode == 1
+    status = nf_open(trim(path), NF_NOWRITE, ncid)
+    if (status /= NF_NOERR) then
+      write(*,*) 'eirene_training_replay: ', trim(path), ': ', &
+          trim(nf_strerror(status))
+      call xerrab('eirene_training_replay: cannot open the event file')
+    end if
+    write(*,*) 'eirene_training_replay: mode', mode, ' from ', trim(path)
+
+    ! fed back into the plasma equations: kept in both modes
+    if (allocated(SNI)) call take_real(ncid, 'eirbra_sni', SNI, size(SNI), .true.)
+    if (allocated(SMO)) call take_real(ncid, 'eirbra_smo', SMO, size(SMO), .true.)
+    if (allocated(SEE)) call take_real(ncid, 'eirbra_see', SEE, size(SEE), .true.)
+    if (allocated(SEI)) call take_real(ncid, 'eirbra_sei', SEI, size(SEI), .true.)
+    if (allocated(wldna)) call take_real(ncid, 'wneutrals_wldna', wldna, size(wldna), .true.)
+    if (allocated(wldra)) call take_real(ncid, 'wneutrals_wldra', wldra, size(wldra), .true.)
+    if (allocated(wldpa)) call take_real(ncid, 'wneutrals_wldpa', wldpa, size(wldpa), .true.)
+    if (allocated(wldnm)) call take_real(ncid, 'wneutrals_wldnm', wldnm, size(wldnm), .true.)
+    if (allocated(wldrm)) call take_real(ncid, 'wneutrals_wldrm', wldrm, size(wldrm), .true.)
+    if (allocated(wldpm)) call take_real(ncid, 'wneutrals_wldpm', wldpm, size(wldpm), .true.)
+
+    ! everything else EIRENE returns: replayed in mode 1, zeroed in mode 2
+    if (allocated(SNE_PAEL)) call take_real(ncid, 'eirbra_sne_pael', SNE_PAEL, size(SNE_PAEL), full)
+    if (allocated(SNE_PMEL)) call take_real(ncid, 'eirbra_sne_pmel', SNE_PMEL, size(SNE_PMEL), full)
+    if (allocated(SNE_PIEL)) call take_real(ncid, 'eirbra_sne_piel', SNE_PIEL, size(SNE_PIEL), full)
+    if (allocated(SNA_PAAT)) call take_real(ncid, 'eirbra_sna_paat', SNA_PAAT, size(SNA_PAAT), full)
+    if (allocated(SNA_PMAT)) call take_real(ncid, 'eirbra_sna_pmat', SNA_PMAT, size(SNA_PMAT), full)
+    if (allocated(SNA_PIAT)) call take_real(ncid, 'eirbra_sna_piat', SNA_PIAT, size(SNA_PIAT), full)
+    if (allocated(SNA_PAML)) call take_real(ncid, 'eirbra_sna_paml', SNA_PAML, size(SNA_PAML), full)
+    if (allocated(SNA_PMML)) call take_real(ncid, 'eirbra_sna_pmml', SNA_PMML, size(SNA_PMML), full)
+    if (allocated(SNA_PIML)) call take_real(ncid, 'eirbra_sna_piml', SNA_PIML, size(SNA_PIML), full)
+    if (allocated(SNA_PAIO)) call take_real(ncid, 'eirbra_sna_paio', SNA_PAIO, size(SNA_PAIO), full)
+    if (allocated(SNA_PMIO)) call take_real(ncid, 'eirbra_sna_pmio', SNA_PMIO, size(SNA_PMIO), full)
+    if (allocated(SNA_PIIO)) call take_real(ncid, 'eirbra_sna_piio', SNA_PIIO, size(SNA_PIIO), full)
+    if (allocated(SNI_PAPL)) call take_real(ncid, 'eirbra_sni_papl', SNI_PAPL, size(SNI_PAPL), full)
+    if (allocated(SNI_PMPL)) call take_real(ncid, 'eirbra_sni_pmpl', SNI_PMPL, size(SNI_PMPL), full)
+    if (allocated(SNI_PIPL)) call take_real(ncid, 'eirbra_sni_pipl', SNI_PIPL, size(SNI_PIPL), full)
+    if (allocated(SNI_PPPL)) call take_real(ncid, 'eirbra_sni_pppl', SNI_PPPL, size(SNI_PPPL), full)
+    if (allocated(SMO_MAPL)) call take_real(ncid, 'eirbra_smo_mapl', SMO_MAPL, size(SMO_MAPL), full)
+    if (allocated(SMO_MMPL)) call take_real(ncid, 'eirbra_smo_mmpl', SMO_MMPL, size(SMO_MMPL), full)
+    if (allocated(SMO_MIPL)) call take_real(ncid, 'eirbra_smo_mipl', SMO_MIPL, size(SMO_MIPL), full)
+    if (allocated(SMO_MPPL)) call take_real(ncid, 'eirbra_smo_mppl', SMO_MPPL, size(SMO_MPPL), full)
+    if (allocated(SEE_EAEL)) call take_real(ncid, 'eirbra_see_eael', SEE_EAEL, size(SEE_EAEL), full)
+    if (allocated(SEE_EMEL)) call take_real(ncid, 'eirbra_see_emel', SEE_EMEL, size(SEE_EMEL), full)
+    if (allocated(SEE_EIEL)) call take_real(ncid, 'eirbra_see_eiel', SEE_EIEL, size(SEE_EIEL), full)
+    if (allocated(SEE_EPEL)) call take_real(ncid, 'eirbra_see_epel', SEE_EPEL, size(SEE_EPEL), full)
+    if (allocated(SEI_EAPL)) call take_real(ncid, 'eirbra_sei_eapl', SEI_EAPL, size(SEI_EAPL), full)
+    if (allocated(SEI_EMPL)) call take_real(ncid, 'eirbra_sei_empl', SEI_EMPL, size(SEI_EMPL), full)
+    if (allocated(SEI_EIPL)) call take_real(ncid, 'eirbra_sei_eipl', SEI_EIPL, size(SEI_EIPL), full)
+    if (allocated(SEI_EPPL)) call take_real(ncid, 'eirbra_sei_eppl', SEI_EPPL, size(SEI_EPPL), full)
+    if (allocated(VOLSUMN)) call take_real(ncid, 'eirbra_volsumn', VOLSUMN, size(VOLSUMN), full)
+    if (allocated(VOLSUMM)) call take_real(ncid, 'eirbra_volsumm', VOLSUMM, size(VOLSUMM), full)
+    if (allocated(VOLSUMEI)) call take_real(ncid, 'eirbra_volsumei', VOLSUMEI, size(VOLSUMEI), full)
+    if (allocated(VOLSUMEE)) call take_real(ncid, 'eirbra_volsumee', VOLSUMEE, size(VOLSUMEE), full)
+    if (allocated(SRCSTRN)) call take_real(ncid, 'eirbra_srcstrn', SRCSTRN, size(SRCSTRN), full)
+    if (allocated(FLXSPCI)) call take_real(ncid, 'eirbra_flxspci', FLXSPCI, size(FLXSPCI), full)
+    if (allocated(dab2)) call take_real(ncid, 'wneutrals_dab2', dab2, size(dab2), full)
+    if (allocated(tab2)) call take_real(ncid, 'wneutrals_tab2', tab2, size(tab2), full)
+    if (allocated(rfluxa)) call take_real(ncid, 'wneutrals_rfluxa', rfluxa, size(rfluxa), full)
+    if (allocated(refluxa)) call take_real(ncid, 'wneutrals_refluxa', refluxa, size(refluxa), full)
+    if (allocated(pfluxa)) call take_real(ncid, 'wneutrals_pfluxa', pfluxa, size(pfluxa), full)
+    if (allocated(pefluxa)) call take_real(ncid, 'wneutrals_pefluxa', pefluxa, size(pefluxa), full)
+    if (allocated(tfluxa)) call take_real(ncid, 'wneutrals_tfluxa', tfluxa, size(tfluxa), full)
+    if (allocated(tefluxa)) call take_real(ncid, 'wneutrals_tefluxa', tefluxa, size(tefluxa), full)
+    if (allocated(dmb2)) call take_real(ncid, 'wneutrals_dmb2', dmb2, size(dmb2), full)
+    if (allocated(tmb2)) call take_real(ncid, 'wneutrals_tmb2', tmb2, size(tmb2), full)
+    if (allocated(rfluxm)) call take_real(ncid, 'wneutrals_rfluxm', rfluxm, size(rfluxm), full)
+    if (allocated(refluxm)) call take_real(ncid, 'wneutrals_refluxm', refluxm, size(refluxm), full)
+    if (allocated(pfluxm)) call take_real(ncid, 'wneutrals_pfluxm', pfluxm, size(pfluxm), full)
+    if (allocated(pefluxm)) call take_real(ncid, 'wneutrals_pefluxm', pefluxm, size(pefluxm), full)
+    if (allocated(tfluxm)) call take_real(ncid, 'wneutrals_tfluxm', tfluxm, size(tfluxm), full)
+    if (allocated(tefluxm)) call take_real(ncid, 'wneutrals_tefluxm', tefluxm, size(tefluxm), full)
+    if (allocated(srcml)) call take_real(ncid, 'wneutrals_srcml', srcml, size(srcml), full)
+    if (allocated(dib2)) call take_real(ncid, 'wneutrals_dib2', dib2, size(dib2), full)
+    if (allocated(tib2)) call take_real(ncid, 'wneutrals_tib2', tib2, size(tib2), full)
+    if (allocated(emiss)) call take_real(ncid, 'wneutrals_emiss', emiss, size(emiss), full)
+    if (allocated(emissmol)) call take_real(ncid, 'wneutrals_emissmol', emissmol, size(emissmol), full)
+    if (allocated(edissml)) call take_real(ncid, 'wneutrals_edissml', edissml, size(edissml), full)
+    if (allocated(eneutrad)) call take_real(ncid, 'wneutrals_eneutrad', eneutrad, size(eneutrad), full)
+    if (allocated(emolrad)) call take_real(ncid, 'wneutrals_emolrad', emolrad, size(emolrad), full)
+    if (allocated(eionrad)) call take_real(ncid, 'wneutrals_eionrad', eionrad, size(eionrad), full)
+    if (allocated(wldpeb)) call take_real(ncid, 'wneutrals_wldpeb', wldpeb, size(wldpeb), full)
+    if (allocated(wldspt)) call take_real(ncid, 'wneutrals_wldspt', wldspt, size(wldspt), full)
+    if (allocated(ewlda)) call take_real(ncid, 'wneutrals_ewlda', ewlda, size(ewlda), full)
+    if (allocated(wldspta)) call take_real(ncid, 'wneutrals_wldspta', wldspta, size(wldspta), full)
+    if (allocated(ewldm)) call take_real(ncid, 'wneutrals_ewldm', ewldm, size(ewldm), full)
+    if (allocated(wldsptm)) call take_real(ncid, 'wneutrals_wldsptm', wldsptm, size(wldsptm), full)
+    if (allocated(wldpp)) call take_real(ncid, 'wneutrals_wldpp', wldpp, size(wldpp), full)
+    if (allocated(wldnek)) call take_real(ncid, 'wneutrals_wldnek', wldnek, size(wldnek), full)
+    if (allocated(wldnep)) call take_real(ncid, 'wneutrals_wldnep', wldnep, size(wldnep), full)
+    if (allocated(wlpump)) call take_real(ncid, 'wneutrals_wlpump', wlpump, size(wlpump), full)
+    if (allocated(eirpump)) call take_real(ncid, 'wneutrals_eirpump', eirpump, size(eirpump), full)
+    if (allocated(eirspta)) call take_real(ncid, 'wneutrals_eirspta', eirspta, size(eirspta), full)
+    if (allocated(eirsptm)) call take_real(ncid, 'wneutrals_eirsptm', eirsptm, size(eirsptm), full)
+    if (allocated(wldna_res)) call take_real(ncid, 'wneutrals_wldna_res', wldna_res, size(wldna_res), full)
+    if (allocated(ewlda_res)) call take_real(ncid, 'wneutrals_ewlda_res', ewlda_res, size(ewlda_res), full)
+    if (allocated(ewldea_res)) call take_real(ncid, 'wneutrals_ewldea_res', ewldea_res, size(ewldea_res), full)
+    if (allocated(wldspta_res)) call take_real(ncid, 'wneutrals_wldspta_res', wldspta_res, size(wldspta_res), full)
+    if (allocated(wldnm_res)) call take_real(ncid, 'wneutrals_wldnm_res', wldnm_res, size(wldnm_res), full)
+    if (allocated(ewldm_res)) call take_real(ncid, 'wneutrals_ewldm_res', ewldm_res, size(ewldm_res), full)
+    if (allocated(ewldem_res)) call take_real(ncid, 'wneutrals_ewldem_res', ewldem_res, size(ewldem_res), full)
+    if (allocated(ewldmr_res)) call take_real(ncid, 'wneutrals_ewldmr_res', ewldmr_res, size(ewldmr_res), full)
+    if (allocated(wldsptm_res)) call take_real(ncid, 'wneutrals_wldsptm_res', wldsptm_res, size(wldsptm_res), full)
+    if (allocated(ewldt_res)) call take_real(ncid, 'wneutrals_ewldt_res', ewldt_res, size(ewldt_res), full)
+    if (allocated(ewldrp_res)) call take_real(ncid, 'wneutrals_ewldrp_res', ewldrp_res, size(ewldrp_res), full)
+    if (allocated(wldspt_res)) call take_real(ncid, 'wneutrals_wldspt_res', wldspt_res, size(wldspt_res), full)
+    if (allocated(wlpump_res)) call take_real(ncid, 'wneutrals_wlpump_res', wlpump_res, size(wlpump_res), full)
+    if (allocated(pdena_int)) call take_real(ncid, 'wneutrals_pdena_int', pdena_int, size(pdena_int), full)
+    if (allocated(pdena_int_b2)) call take_real(ncid, 'wneutrals_pdena_int_b2', pdena_int_b2, size(pdena_int_b2), full)
+    if (allocated(edena_int)) call take_real(ncid, 'wneutrals_edena_int', edena_int, size(edena_int), full)
+    if (allocated(edena_int_b2)) call take_real(ncid, 'wneutrals_edena_int_b2', edena_int_b2, size(edena_int_b2), full)
+    if (allocated(pdenm_int)) call take_real(ncid, 'wneutrals_pdenm_int', pdenm_int, size(pdenm_int), full)
+    if (allocated(pdenm_int_b2)) call take_real(ncid, 'wneutrals_pdenm_int_b2', pdenm_int_b2, size(pdenm_int_b2), full)
+    if (allocated(edenm_int)) call take_real(ncid, 'wneutrals_edenm_int', edenm_int, size(edenm_int), full)
+    if (allocated(edenm_int_b2)) call take_real(ncid, 'wneutrals_edenm_int_b2', edenm_int_b2, size(edenm_int_b2), full)
+    if (allocated(pdeni_int)) call take_real(ncid, 'wneutrals_pdeni_int', pdeni_int, size(pdeni_int), full)
+    if (allocated(pdeni_int_b2)) call take_real(ncid, 'wneutrals_pdeni_int_b2', pdeni_int_b2, size(pdeni_int_b2), full)
+    if (allocated(edeni_int)) call take_real(ncid, 'wneutrals_edeni_int', edeni_int, size(edeni_int), full)
+    if (allocated(edeni_int_b2)) call take_real(ncid, 'wneutrals_edeni_int_b2', edeni_int_b2, size(edeni_int_b2), full)
+    if (associated(pdena)) call take_real(ncid, 'cestim_pdena', pdena, size(pdena), full)
+    if (associated(edena)) call take_real(ncid, 'cestim_edena', edena, size(edena), full)
+    if (associated(vxdena)) call take_real(ncid, 'cestim_vxdena', vxdena, size(vxdena), full)
+    if (associated(vydena)) call take_real(ncid, 'cestim_vydena', vydena, size(vydena), full)
+    if (associated(vzdena)) call take_real(ncid, 'cestim_vzdena', vzdena, size(vzdena), full)
+    if (associated(pdenm)) call take_real(ncid, 'cestim_pdenm', pdenm, size(pdenm), full)
+    if (associated(edenm)) call take_real(ncid, 'cestim_edenm', edenm, size(edenm), full)
+    if (associated(vxdenm)) call take_real(ncid, 'cestim_vxdenm', vxdenm, size(vxdenm), full)
+    if (associated(vydenm)) call take_real(ncid, 'cestim_vydenm', vydenm, size(vydenm), full)
+    if (associated(vzdenm)) call take_real(ncid, 'cestim_vzdenm', vzdenm, size(vzdenm), full)
+    if (associated(pdeni)) call take_real(ncid, 'cestim_pdeni', pdeni, size(pdeni), full)
+    if (associated(edeni)) call take_real(ncid, 'cestim_edeni', edeni, size(edeni), full)
+    if (associated(vxdeni)) call take_real(ncid, 'cestim_vxdeni', vxdeni, size(vxdeni), full)
+    if (associated(vydeni)) call take_real(ncid, 'cestim_vydeni', vydeni, size(vydeni), full)
+    if (associated(vzdeni)) call take_real(ncid, 'cestim_vzdeni', vzdeni, size(vzdeni), full)
+
+    call take_scalar(ncid, 'eirene_b2brm', b2brm, full)
+    call take_scalar(ncid, 'eirene_b2rd', b2rd, full)
+    call take_scalar(ncid, 'eirene_b2q', b2q, full)
+    call take_scalar(ncid, 'eirene_b2vp', b2vp, full)
+
+    status = nf_close(ncid)
+    call check_cdf_status(status)
+#endif
+  end subroutine replay_eirene_training_event
+
+#if defined(B25_EIRENE) && !defined(NO_CDF)
+  subroutine take_real(ncid, name, values, n, keep)
+    implicit none
+#include <netcdf.inc>
+    integer, intent(in) :: ncid, n
+    character(len=*), intent(in) :: name
+    real(kind=R8), intent(inout) :: values(*)
+    logical, intent(in) :: keep
+    integer :: status, varid, ndims, dimids(NF_MAX_VAR_DIMS), i, length, total
+    external :: check_cdf_status, xerrab
+
+    if (.not. keep) then
+      values(1:n) = 0.0_R8
+      return
+    end if
+    status = nf_inq_varid(ncid, trim(name), varid)
+    if (status /= NF_NOERR) &
+        call xerrab('eirene_training_replay: missing ' // trim(name))
+    status = nf_inq_varndims(ncid, varid, ndims)
+    call check_cdf_status(status)
+    status = nf_inq_vardimid(ncid, varid, dimids)
+    call check_cdf_status(status)
+    total = 1
+    do i = 1, ndims
+      status = nf_inq_dimlen(ncid, dimids(i), length)
+      call check_cdf_status(status)
+      total = total * length
+    end do
+    if (total /= n) &
+        call xerrab('eirene_training_replay: size mismatch for ' // trim(name))
+    status = nf_get_var_double(ncid, varid, values)
+    call check_cdf_status(status)
+  end subroutine take_real
+
+  subroutine take_scalar(ncid, name, value, keep)
+    implicit none
+#include <netcdf.inc>
+    integer, intent(in) :: ncid
+    character(len=*), intent(in) :: name
+    real(kind=R8), intent(inout) :: value
+    logical, intent(in) :: keep
+    integer :: status
+    external :: check_cdf_status
+
+    if (.not. keep) then
+      value = 0.0_R8
+      return
+    end if
+    status = nf_get_att_double(ncid, NF_GLOBAL, trim(name), value)
+    call check_cdf_status(status)
+  end subroutine take_scalar
 #endif
 
 end module b2mod_eirene_training_dump

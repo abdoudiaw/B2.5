@@ -19,9 +19,11 @@
       use b2mod_trace
       use b2mod_b2cmpa
       use b2mod_b2cmpb
+      use b2mod_ipmain, only : ipgetc
       use b2mod_eirene_training_dump
      & ,only : capture_eirene_training_input,
-     &         write_eirene_training_event
+     &         write_eirene_training_event,
+     &         replay_eirene_training_event
       use b2mod_balance !djm Jan2017
      & ,only : eirene_mc_papl_sna0to1, eirene_mc_pmpl_sna0to1,
      &         eirene_mc_pael_sne0to1, eirene_mc_pmel_sne0to1,
@@ -267,14 +269,16 @@ c      data lis_hlp / 110, 111, 112, 49 /
       integer output_style, linearisation, save_f31,
      1 repeat_first_call, ionising_core, dpc_fix, eircount,
      2 no_sseicorr, save_f30, stab_corr, training_dump,
-     3 training_repeat_count, training_result_used
+     3 training_repeat_count, training_result_used,
+     4 training_replay
+      character(len=256), save :: training_replay_file
       save ncall, output_style,
      * pfrregno1, pfrregno2, solregno, isfeedback, b2stbc_feedback,
      * nesepm_sol, nesepm_pfr, ndes, private_flux_puff, nesepm_istra,
      * neutral_sources_rescale, ncallfeedback, save_f31,
      1 repeat_first_call, ionising_core, dpc_fix,
      2 volrec_sol, ndes_sol, no_sseicorr, nepedm_sol, save_f30,
-     3 stab_corr, training_dump
+     3 stab_corr, training_dump, training_replay
 csw 26mar2013
       integer, save :: iscltst=0
 csw 26feb2014
@@ -315,7 +319,8 @@ csw 26feb2014
      5  ndes/0.0_R8/, save_f31/0/, repeat_first_call/1/,
      6  volrec_sol/0.0_R8/, ndes_sol/0.0_R8/,
      7  no_sseicorr/0/, nepedm_sol/0.0_R8/, save_f30/0/, stab_corr/1/,
-     8  training_dump/0/
+     8  training_dump/0/, training_replay/0/,
+     9  training_replay_file/' '/
 
 *-----------------------------------------------------------------------
 *.computation
@@ -477,6 +482,11 @@ c not sure this is the right place
         call ipgeti ('eirene_savef30', save_f30)
         call ipgeti ('eirene_savef31', save_f31)
         call ipgeti ('eirene_training_dump', training_dump)
+        call ipgeti ('eirene_training_replay', training_replay)
+        call ipgetc ('eirene_training_replay_file',
+     *    training_replay_file)
+        call xertst (training_replay.ge.0 .and. training_replay.le.2,
+     .   'faulty input parameter eirene_training_replay')
         call ipgeti ('eirene_use_recyceir', use_recyceir)
 csw 28jan2011, call to eirene_mc_init not used anymore, use new modules
 c        call eirene_mc_init(nx,ny)
@@ -967,6 +977,10 @@ c         SINGLE EIRENE CALL
           call eirene_eirsrt(last,my_ltime,eirene_step_dt,tflux,
      *     b2brem,b2rad,b2qie(0),b2vdp,
      1     eirene_step_cpu)
+          if(training_replay.ne.0) then
+            call replay_eirene_training_event(training_replay_file,
+     *        training_replay,b2brem,b2rad,b2qie(0),b2vdp)
+          endif
           if(training_dump.ne.0) then
             call write_eirene_training_event(ncall,eircount+1,
      *        training_repeat_count,training_result_used,0,last,
@@ -1035,6 +1049,10 @@ csw 25jan2011 LTIME=.false. in eirsrt call
               call eirene_eirsrt(last,my_ltime,eirene_step_dt,tflux,
      *         b2brem,b2rad,b2qie(0),b2vdp,
      1         eirene_step_cpu)
+              if(training_replay.ne.0) then
+                call replay_eirene_training_event(training_replay_file,
+     *            training_replay,b2brem,b2rad,b2qie(0),b2vdp)
+              endif
               if(training_dump.ne.0) then
                 training_result_used=0
                 if(eircount.eq.repeat_first_call)
