@@ -23,7 +23,9 @@
       use b2mod_eirene_training_dump
      & ,only : capture_eirene_training_input,
      &         write_eirene_training_event,
-     &         replay_eirene_training_event
+     &         replay_eirene_training_event,
+     &         eirene_surrogate_decision,
+     &         eirene_surrogate_consumed
       use b2mod_balance !djm Jan2017
      & ,only : eirene_mc_papl_sna0to1, eirene_mc_pmpl_sna0to1,
      &         eirene_mc_pael_sne0to1, eirene_mc_pmel_sne0to1,
@@ -272,6 +274,9 @@ c      data lis_hlp / 110, 111, 112, 49 /
      3 training_repeat_count, training_result_used,
      4 training_replay
       character(len=256), save :: training_replay_file
+      real(kind=R8), save :: surrogate_timeout
+      logical :: use_surrogate, request_written
+      character(len=256) :: surrogate_answer_path
       save ncall, output_style,
      * pfrregno1, pfrregno2, solregno, isfeedback, b2stbc_feedback,
      * nesepm_sol, nesepm_pfr, ndes, private_flux_puff, nesepm_istra,
@@ -320,7 +325,7 @@ csw 26feb2014
      6  volrec_sol/0.0_R8/, ndes_sol/0.0_R8/,
      7  no_sseicorr/0/, nepedm_sol/0.0_R8/, save_f30/0/, stab_corr/1/,
      8  training_dump/0/, training_replay/0/,
-     9  training_replay_file/' '/
+     9  training_replay_file/' '/, surrogate_timeout/600.0_R8/
 
 *-----------------------------------------------------------------------
 *.computation
@@ -485,8 +490,9 @@ c not sure this is the right place
         call ipgeti ('eirene_training_replay', training_replay)
         call ipgetc ('eirene_training_replay_file',
      *    training_replay_file)
-        call xertst (training_replay.ge.0 .and. training_replay.le.2,
+        call xertst (training_replay.ge.0 .and. training_replay.le.3,
      .   'faulty input parameter eirene_training_replay')
+        call ipgetr ('eirene_surrogate_timeout', surrogate_timeout)
         call ipgeti ('eirene_use_recyceir', use_recyceir)
 csw 28jan2011, call to eirene_mc_init not used anymore, use new modules
 c        call eirene_mc_init(nx,ny)
@@ -960,7 +966,7 @@ c           calculated at the end of the previous real time step
             call reinitialize_fort_file(15)
           endif
 c         SINGLE EIRENE CALL
-          if(training_dump.ne.0) then
+          if(training_dump.ne.0 .or. training_replay.eq.3) then
             if(n_avg_repeat.gt.1) then
               training_repeat_count=n_avg_repeat
               training_result_used=0
@@ -974,18 +980,39 @@ c         SINGLE EIRENE CALL
             call capture_eirene_training_input(nx,ny,tflux,flux_scale,
      *        crcstra(1:size(tflux)))
           endif
-          call eirene_eirsrt(last,my_ltime,eirene_step_dt,tflux,
-     *     b2brem,b2rad,b2qie(0),b2vdp,
-     1     eirene_step_cpu)
-          if(training_replay.ne.0) then
-            call replay_eirene_training_event(training_replay_file,
-     *        training_replay,b2brem,b2rad,b2qie(0),b2vdp)
-          endif
-          if(training_dump.ne.0) then
+c         Surrogate mode: offer the background to the external service and
+c         skip EIRENE when it answers; its answer replaces the return like a
+c         reduced replay. A fallback (or the first call) runs EIRENE and, with
+c         the dump on, records the event as new training data.
+          use_surrogate=.false.
+          if(training_replay.eq.3 .and. n_avg_repeat.eq.1 .and.
+     .       .not.last) then
             call write_eirene_training_event(ncall,eircount+1,
      *        training_repeat_count,training_result_used,0,last,
      1        my_ltime,eirene_step_dt,b2brem,b2rad,b2qie(0),b2vdp,
-     2        eirene_step_cpu)
+     2        eirene_step_cpu,path='eirene_surrogate_request.nc.tmp',
+     3        written=request_written)
+            call eirene_surrogate_decision(ncall,request_written,
+     *        surrogate_timeout,use_surrogate,surrogate_answer_path)
+          endif
+          if(use_surrogate) then
+            call replay_eirene_training_event(surrogate_answer_path,
+     *        2,b2brem,b2rad,b2qie(0),b2vdp)
+            call eirene_surrogate_consumed()
+          else
+            call eirene_eirsrt(last,my_ltime,eirene_step_dt,tflux,
+     *       b2brem,b2rad,b2qie(0),b2vdp,
+     1       eirene_step_cpu)
+            if(training_replay.ge.1 .and. training_replay.le.2) then
+              call replay_eirene_training_event(training_replay_file,
+     *          training_replay,b2brem,b2rad,b2qie(0),b2vdp)
+            endif
+            if(training_dump.ne.0) then
+              call write_eirene_training_event(ncall,eircount+1,
+     *          training_repeat_count,training_result_used,0,last,
+     1          my_ltime,eirene_step_dt,b2brem,b2rad,b2qie(0),b2vdp,
+     2          eirene_step_cpu)
+            endif
           endif
 c         Cumulate source terms from past and current Eirene calls
           if(n_avg_repeat.gt.1) then
@@ -1049,7 +1076,7 @@ csw 25jan2011 LTIME=.false. in eirsrt call
               call eirene_eirsrt(last,my_ltime,eirene_step_dt,tflux,
      *         b2brem,b2rad,b2qie(0),b2vdp,
      1         eirene_step_cpu)
-              if(training_replay.ne.0) then
+              if(training_replay.ge.1 .and. training_replay.le.2) then
                 call replay_eirene_training_event(training_replay_file,
      *            training_replay,b2brem,b2rad,b2qie(0),b2vdp)
               endif

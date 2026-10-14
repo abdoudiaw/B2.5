@@ -3410,7 +3410,15 @@
 				<default>0</default>
 				<type>integer</type>
 				<description>
-					Test hook for the EIRENE training contract. If eirene_training_replay.eq.1, the result of every Eirene call is replaced by the return state stored in the event file named by eirene_training_replay_file. If .eq.2, only the per-stratum particle, parallel-momentum, electron-energy and ion-energy sources and the wall tallies used for the core-boundary neutral flux are replaced, and every other returned quantity is set to zero. The default value 0 leaves the coupled solution unchanged.
+					Test hook for the EIRENE training contract. If eirene_training_replay.eq.1, the result of every Eirene call is replaced by the return state stored in the event file named by eirene_training_replay_file. If .eq.2, only the per-stratum particle, parallel-momentum, electron-energy and ion-energy sources and the wall tallies used for the core-boundary neutral flux are replaced, and every other returned quantity is set to zero. If .eq.3 (surrogate mode), before each Eirene call B2.5 writes the plasma background as the event file eirene_surrogate_request.nc in its run directory and waits up to eirene_surrogate_timeout seconds for an external service to answer with eirene_surrogate_answer.nc (an event file with the predicted return, applied as in mode 2 and Eirene is not called) or with the empty marker eirene_surrogate_fallback (Eirene is called as usual; with eirene_training_dump.ne.0 that call is recorded as a training event). Decisions are appended to eirene_surrogate_decisions.log. Repeated calls (eirene_averaging_multiple_calls.gt.1) and the repeated first call always run Eirene. The default value 0 leaves the coupled solution unchanged.
+				</description>
+			</switch>
+			<switch>
+				<name>eirene_surrogate_timeout</name>
+				<default>600.0</default>
+				<type>real</type>
+				<description>
+					Seconds B2.5 waits for the surrogate service to answer a request when eirene_training_replay.eq.3; after the timeout Eirene is called as usual.
 				</description>
 			</switch>
 			<switch>

@@ -73,6 +73,18 @@ module b2mod_eirene_training_dump
   public :: capture_eirene_training_input
   public :: write_eirene_training_event
   public :: replay_eirene_training_event
+  public :: eirene_surrogate_decision
+  public :: eirene_surrogate_consumed
+
+  ! Surrogate mode (eirene_training_replay = 3): file exchange with an external
+  ! service in the directory b2mn runs in. B2.5 writes the request (an event file
+  ! whose BRAEIR/control inputs are current; its return arrays are the previous
+  ! call's), the service answers with an event file holding the predicted return
+  ! or with an empty fallback marker.
+  character(len=*), parameter :: surrogate_request = 'eirene_surrogate_request.nc'
+  character(len=*), parameter :: surrogate_answer = 'eirene_surrogate_answer.nc'
+  character(len=*), parameter :: surrogate_fallback = 'eirene_surrogate_fallback'
+  character(len=*), parameter :: surrogate_log = 'eirene_surrogate_decisions.log'
 
 contains
 
@@ -250,13 +262,18 @@ contains
 
   subroutine write_eirene_training_event(b2_call, repeat_index, &
       repeat_count, result_used_by_b2, event_kind, lstop_b2, ltime_b2, &
-      deltat_b2, b2brm_b2, b2rd_b2, b2q_b2, b2vp_b2, step_cpu_b2)
+      deltat_b2, b2brm_b2, b2rd_b2, b2q_b2, b2vp_b2, step_cpu_b2, path, &
+      written)
     implicit none
     integer, intent(in) :: b2_call, repeat_index, repeat_count
     integer, intent(in) :: result_used_by_b2, event_kind
     logical, intent(in) :: lstop_b2, ltime_b2
     real(kind=R8), intent(in) :: deltat_b2, b2brm_b2, b2rd_b2
     real(kind=R8), intent(in) :: b2q_b2, b2vp_b2, step_cpu_b2
+    ! path: write to this file name instead of the event name (surrogate
+    ! request); written: set to .true. when a file was produced.
+    character(len=*), intent(in), optional :: path
+    logical, intent(out), optional :: written
 
 #if defined(B25_EIRENE) && !defined(NO_CDF)
 #include <netcdf.inc>
@@ -289,6 +306,7 @@ contains
     external :: check_cdf_status, get_B25_hash, get_SOLPS_hash
     external :: get_Eir_hash
 
+    if (present(written)) written = .false.
     call mpi_comm_rank(mpi_comm_world, mpi_rank, mpi_error)
     if (mpi_rank /= 0) return
 
@@ -310,6 +328,7 @@ contains
     write(filename,'(a,i8.8,a,a,a,i4.4,a)') &
         'eirene_training_v3_b2call_', b2_call, '_', &
         trim(event_label), '_', repeat_index, '.nc'
+    if (present(path)) filename = path
 
     status = nf_create(trim(filename), NF_CLOBBER, ncid)
     call check_cdf_status(status)
@@ -973,13 +992,94 @@ contains
 
     status = nf_close(ncid)
     call check_cdf_status(status)
-    write(*,*) 'Wrote EIRENE training event: ', trim(filename)
+    if (present(written)) written = .true.
+    if (.not.present(path)) &
+        write(*,*) 'Wrote EIRENE training event: ', trim(filename)
 #else
     if (b2_call == 0 .and. repeat_index == 1) then
       write(*,*) 'eirene_training_dump ignored: NetCDF/EIRENE unavailable'
     end if
 #endif
   end subroutine write_eirene_training_event
+
+  ! Surrogate mode, one EIRENE call: the request written by
+  ! write_eirene_training_event(path=surrogate_request) is handed to the
+  ! service by renaming its temporary name, then rank 0 waits (polling, up to
+  ! timeout seconds) for the answer file or the fallback marker. B2.5 runs on
+  ! rank 0 only; the other ranks are EIRENE workers blocked in eirsrt's own
+  ! broadcast until the next real call, so no collective may be issued here
+  ! and skipping a call leaves them waiting. The caller never skips the last
+  ! call of the run (lstop), which releases the workers. A request that could
+  ! not be written (first call, arrays not yet allocated) or a timeout means
+  ! fallback, i.e. the normal EIRENE call.
+  subroutine eirene_surrogate_decision(b2_call, request_written, timeout, &
+      use_surrogate, answer_path)
+    implicit none
+    integer, intent(in) :: b2_call
+    logical, intent(in) :: request_written
+    real(kind=R8), intent(in) :: timeout
+    logical, intent(out) :: use_surrogate
+    character(len=*), intent(out) :: answer_path
+#if defined(B25_EIRENE) && !defined(NO_CDF)
+    integer :: mpi_rank, mpi_error, unit, cmdstat
+    logical :: have_answer, have_fallback
+    real(kind=R8) :: waited
+    integer(kind=8) :: t0, t1, rate
+
+    use_surrogate = .false.
+    answer_path = surrogate_answer
+    call mpi_comm_rank(mpi_comm_world, mpi_rank, mpi_error)
+    if (mpi_rank == 0) then
+      waited = 0.0_R8
+      if (request_written) then
+        call execute_command_line('mv -f ' // surrogate_request // '.tmp ' // &
+            surrogate_request, cmdstat=cmdstat)
+        call system_clock(t0, rate)
+        do
+          inquire(file=surrogate_answer, exist=have_answer)
+          inquire(file=surrogate_fallback, exist=have_fallback)
+          if (have_answer .or. have_fallback) exit
+          call system_clock(t1)
+          waited = real(t1 - t0, R8) / real(rate, R8)
+          if (waited > timeout) exit
+          call execute_command_line('sleep 0.05', cmdstat=cmdstat)
+        end do
+        call system_clock(t1)
+        waited = real(t1 - t0, R8) / real(rate, R8)
+        use_surrogate = have_answer
+        if (have_fallback) call execute_command_line('rm -f ' // &
+            surrogate_fallback, cmdstat=cmdstat)
+        if (.not.(have_answer .or. have_fallback)) then
+          write(*,*) 'eirene surrogate: no answer within timeout, ', &
+              'calling EIRENE'
+          call execute_command_line('rm -f ' // surrogate_request, &
+              cmdstat=cmdstat)
+        end if
+      end if
+      open(newunit=unit, file=surrogate_log, position='append', &
+          status='unknown')
+      write(unit,'(i8,1x,l1,1x,l1,1x,f10.3)') b2_call, request_written, &
+          use_surrogate, waited
+      close(unit)
+    end if
+#else
+    use_surrogate = .false.
+    answer_path = ' '
+#endif
+  end subroutine eirene_surrogate_decision
+
+  ! Remove the answer after it has been replayed, so that it cannot be
+  ! mistaken for the answer to the next request.
+  subroutine eirene_surrogate_consumed()
+    implicit none
+#if defined(B25_EIRENE) && !defined(NO_CDF)
+    integer :: mpi_rank, mpi_error, cmdstat
+    call mpi_comm_rank(mpi_comm_world, mpi_rank, mpi_error)
+    if (mpi_rank /= 0) return
+    call execute_command_line('rm -f ' // surrogate_answer // ' ' // &
+        surrogate_request, cmdstat=cmdstat)
+#endif
+  end subroutine eirene_surrogate_consumed
 
 #if defined(B25_EIRENE) && !defined(NO_CDF)
   subroutine put_global_text(ncid, name, value)
