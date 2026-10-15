@@ -263,7 +263,7 @@ contains
   subroutine write_eirene_training_event(b2_call, repeat_index, &
       repeat_count, result_used_by_b2, event_kind, lstop_b2, ltime_b2, &
       deltat_b2, b2brm_b2, b2rd_b2, b2q_b2, b2vp_b2, step_cpu_b2, path, &
-      written)
+      written, contract_only)
     implicit none
     integer, intent(in) :: b2_call, repeat_index, repeat_count
     integer, intent(in) :: result_used_by_b2, event_kind
@@ -271,13 +271,19 @@ contains
     real(kind=R8), intent(in) :: deltat_b2, b2brm_b2, b2rd_b2
     real(kind=R8), intent(in) :: b2q_b2, b2vp_b2, step_cpu_b2
     ! path: write to this file name instead of the event name (surrogate
-    ! request); written: set to .true. when a file was produced.
+    ! request); written: set to .true. when a file was produced;
+    ! contract_only: write the inputs and only the return arrays B2.5 feeds
+    ! back (the surrogate contract), not the reaction channels, B2-grid
+    ! neutral fields, resolved surfaces, inventories and triangle estimators
+    ! (a request file is then ~1 MB instead of ~14 MB).
     character(len=*), intent(in), optional :: path
     logical, intent(out), optional :: written
+    logical, intent(in), optional :: contract_only
 
 #if defined(B25_EIRENE) && !defined(NO_CDF)
 #include <netcdf.inc>
     integer :: status, ncid, mpi_rank, mpi_error
+    logical :: full_return
     integer :: eir_x_id, eir_y_id, fluid_id, momentum_slot_id
     integer :: bra_x_id, bra_y_id, bra_fluid_id
     integer :: stratum_id, active_stratum_id, three_id
@@ -307,6 +313,8 @@ contains
     external :: get_Eir_hash
 
     if (present(written)) written = .false.
+    full_return = .true.
+    if (present(contract_only)) full_return = .not. contract_only
     call mpi_comm_rank(mpi_comm_world, mpi_rank, mpi_error)
     if (mpi_rank /= 0) return
 
@@ -556,6 +564,7 @@ contains
     call put_real(ncid, 'eirbra_sei', SEI, d3, 3, &
         'raw EIRENE ion-energy source estimator')
 
+    if (full_return) then
     call put_real(ncid, 'eirbra_sne_pael', SNE_PAEL, d3, 3, &
         'electron-particle channel: atom-electron')
     call put_real(ncid, 'eirbra_sne_pmel', SNE_PMEL, d3, 3, &
@@ -640,6 +649,7 @@ contains
     call put_real(ncid, 'eirbra_flxspci', FLXSPCI, &
         (/fluid_id, stratum_id/), 2, &
         'plasma-ion flux to recycling surfaces')
+    end if
     if (atom_id >= 0) then
       call put_real(ncid, 'eirbra_srccrfc', SRCCRFC, &
           (/atom_id, stratum_id/), 2, 'source correction factors')
@@ -751,7 +761,7 @@ contains
     call put_real(ncid, 'braeir_po', input_snapshot%po, d2, 2, &
         'electrostatic potential supplied to EIRENE')
 
-    if (wneu_x_id >= 0) then
+    if (full_return .and. wneu_x_id >= 0) then
       d4 = (/wneu_x_id, wneu_y_id, wneu_atom_id, wneu_state_id/)
       call put_real(ncid, 'wneutrals_dab2', dab2, d4, 4, &
           'neutral atom density mapped to the B2 grid')
@@ -877,7 +887,7 @@ contains
           'EIRENE particle-species label')
     end if
 
-    if (resolved_surface_id >= 0) then
+    if (full_return .and. resolved_surface_id >= 0) then
       call put_real(ncid, 'wneutrals_sarea_res', sarea_res, &
           (/resolved_surface_id/), 1, 'resolved wall-surface area')
       d2 = (/wneu_atom_id, resolved_surface_id/)
@@ -924,7 +934,7 @@ contains
           (/nds_surface_id/), 1, 'last B2 cell on resolved surface')
     end if
 
-    if (inventory_stratum_id >= 0) then
+    if (full_return .and. inventory_stratum_id >= 0) then
       d2 = (/wneu_atom_id, inventory_stratum_id/)
       call put_real(ncid, 'wneutrals_pdena_int', pdena_int, d2, 2, &
           'whole-grid atom particle inventory')
@@ -954,7 +964,7 @@ contains
           d2, 2, 'B2-grid test-ion energy inventory')
     end if
 
-    if (triangle_id >= 0) then
+    if (full_return .and. triangle_id >= 0) then
       d2 = (/cestim_atom_id, triangle_id/)
       call put_real(ncid, 'cestim_pdena', pdena, d2, 2, &
           'EIRENE triangular-grid atom particle estimator')

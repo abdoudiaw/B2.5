@@ -991,7 +991,7 @@ c         the dump on, records the event as new training data.
      *        training_repeat_count,training_result_used,0,last,
      1        my_ltime,eirene_step_dt,b2brem,b2rad,b2qie(0),b2vdp,
      2        eirene_step_cpu,path='eirene_surrogate_request.nc.tmp',
-     3        written=request_written)
+     3        written=request_written,contract_only=.true.)
             call eirene_surrogate_decision(ncall,request_written,
      *        surrogate_timeout,use_surrogate,surrogate_answer_path)
           endif
